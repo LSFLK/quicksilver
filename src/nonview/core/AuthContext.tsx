@@ -17,7 +17,7 @@ export const AuthProvider = ({ children }) => {
 
   // Check for existing session on mount
   useEffect(() => {
-    const storedUser = localStorage.getItem("quicksilver_user");
+    const storedUser = localStorage.getItem("handa_user");
     if (storedUser) {
       try {
         const user = JSON.parse(storedUser);
@@ -25,7 +25,7 @@ export const AuthProvider = ({ children }) => {
         setIsAuthenticated(true);
       } catch (error) {
         console.error("Failed to parse stored user:", error);
-        localStorage.removeItem("quicksilver_user");
+        localStorage.removeItem("handa_user");
       }
     }
     setLoading(false);
@@ -43,7 +43,7 @@ export const AuthProvider = ({ children }) => {
           };
           setCurrentUser(user);
           setIsAuthenticated(true);
-          localStorage.setItem("quicksilver_user", JSON.stringify(user));
+          localStorage.setItem("handa_user", JSON.stringify(user));
           resolve(user);
         } else {
           reject(new Error("Invalid credentials"));
@@ -74,7 +74,7 @@ export const AuthProvider = ({ children }) => {
           };
           setCurrentUser(user);
           setIsAuthenticated(true);
-          localStorage.setItem("quicksilver_user", JSON.stringify(user));
+          localStorage.setItem("handa_user", JSON.stringify(user));
           resolve(user);
         } else {
           reject(new Error("Invalid registration data"));
@@ -86,7 +86,7 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     setCurrentUser(null);
     setIsAuthenticated(false);
-    localStorage.removeItem("quicksilver_user");
+    localStorage.removeItem("handa_user");
   };
 
   const updateProfile = async (userData) => {
@@ -96,7 +96,7 @@ export const AuthProvider = ({ children }) => {
         if (currentUser) {
           const updatedUser = { ...currentUser, ...userData };
           setCurrentUser(updatedUser);
-          localStorage.setItem("quicksilver_user", JSON.stringify(updatedUser));
+          localStorage.setItem("handa_user", JSON.stringify(updatedUser));
           resolve(updatedUser);
         } else {
           reject(new Error("No user logged in"));

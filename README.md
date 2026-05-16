@@ -1,4 +1,4 @@
-# Quicksilver
+# Handa
 
 A modern React-based email client implementing the Email 2.0 vision.
 
@@ -18,7 +18,7 @@ See [docs/Email-2.md](docs/Email-2.md) for the complete vision.
 
 ## Architecture
 
-**Quicksilver** is the email client component that works with **Silver**, the Email 2.0 server that implements the complete philosophy. Together, they form a complete email solution for the modern era.
+**Handa** is the email client component that works with **Silver**, the Email 2.0 server that implements the complete philosophy. Together, they form a complete email solution for the modern era.
 
 ## Technology Stack
 
@@ -46,7 +46,7 @@ npm install
 
 | Command             | Description                                                  |
 | ------------------- | ------------------------------------------------------------ |
-| `npm run dev`       | Start the Vite dev server with HMR (default: http://localhost:3000/quicksilver/) |
+| `npm run dev`       | Start the Vite dev server with HMR (default: http://localhost:3000/handa/) |
 | `npm start`         | Alias for `npm run dev`                                      |
 | `npm run build`     | Build the production bundle to `build/`                      |
 | `npm run preview`   | Preview the production build locally                         |
@@ -59,7 +59,7 @@ npm install
 npm run dev
 ```
 
-Then open http://localhost:3000/quicksilver/ in your browser.
+Then open http://localhost:3000/handa/ in your browser.
 
 ## Development Roadmap
 

@@ -1,6 +1,6 @@
 # React Router Design - Milestone 1
 
-This document outlines the BrowserRouter structure for Quicksilver's Milestone 1 implementation.
+This document outlines the BrowserRouter structure for Handa's Milestone 1 implementation.
 
 ## Design Philosophy
 

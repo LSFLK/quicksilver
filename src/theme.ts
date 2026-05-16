@@ -1,6 +1,6 @@
 import { createTheme } from "@mui/material";
 
-// Quicksilver Email 2.0 Theme
+// Handa Email 2.0 Theme
 // Brand Colors: #000000, #8D153A, #EB7400, #FFBE29, #00534E
 const theme = createTheme({
   palette: {

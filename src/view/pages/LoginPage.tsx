@@ -34,7 +34,7 @@ function LoginPage() {
         <Box
           component="img"
           src={`${import.meta.env.BASE_URL}logo192.png`}
-          alt="Quicksilver Logo"
+          alt="Handa Logo"
           sx={{
             width: 120,
             height: 120,
@@ -43,7 +43,7 @@ function LoginPage() {
           }}
         />
         <Typography component="h1" variant="h3" sx={{ mb: 1, fontWeight: 600 }}>
-          Quicksilver
+          Handa
         </Typography>
         <Typography component="h2" variant="h5" sx={{ mb: 3 }}>
           Sign in to your account

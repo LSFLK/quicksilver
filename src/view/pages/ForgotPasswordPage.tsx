@@ -30,7 +30,7 @@ function ForgotPasswordPage() {
         }}
       >
         <Typography component="h1" variant="h3" sx={{ mb: 1, fontWeight: 600 }}>
-          Quicksilver
+          Handa
         </Typography>
         <Typography component="h2" variant="h5" sx={{ mb: 1 }}>
           Reset your password
