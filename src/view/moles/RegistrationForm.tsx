@@ -11,6 +11,10 @@ import {
 import ErrorMessage from "../atoms/ErrorMessage";
 
 // Email service provider configurations
+// smtpSecure=true means implicit TLS (port 465); smtpSecure=false means
+// STARTTLS on the submission port (587). Gmail/Outlook/Yahoo all support both
+// — we default to 465+implicit-TLS because it's a single negotiation and works
+// even when a network rewrites STARTTLS responses.
 const EMAIL_PROVIDERS = {
   gmail: {
     name: "Gmail",
@@ -18,7 +22,7 @@ const EMAIL_PROVIDERS = {
     imapPort: 993,
     imapSecure: true,
     smtpHost: "smtp.gmail.com",
-    smtpPort: 587,
+    smtpPort: 465,
     smtpSecure: true,
   },
   outlook: {
@@ -28,7 +32,7 @@ const EMAIL_PROVIDERS = {
     imapSecure: true,
     smtpHost: "smtp.office365.com",
     smtpPort: 587,
-    smtpSecure: true,
+    smtpSecure: false,
   },
   yahoo: {
     name: "Yahoo Mail",
@@ -36,7 +40,7 @@ const EMAIL_PROVIDERS = {
     imapPort: 993,
     imapSecure: true,
     smtpHost: "smtp.mail.yahoo.com",
-    smtpPort: 587,
+    smtpPort: 465,
     smtpSecure: true,
   },
   custom: {
@@ -45,7 +49,7 @@ const EMAIL_PROVIDERS = {
     imapPort: 993,
     imapSecure: true,
     smtpHost: "",
-    smtpPort: 587,
+    smtpPort: 465,
     smtpSecure: true,
   },
 };

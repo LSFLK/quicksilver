@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import AppLayout from "../moles/AppLayout";
 import ComposeHeader from "../moles/ComposeHeader";
 import ComposeForm from "../moles/ComposeForm";
 import AttachmentList from "../moles/AttachmentList";
 import { useData } from "../../nonview/core/DataContext";
+import type { RecipientInputHandle } from "../moles/RecipientInput";
 
 const parseRecipients = (toParam) => {
   if (!toParam) return [];
@@ -29,6 +30,11 @@ function ComposePage() {
   const [body, setBody] = useState(initialBody);
   const [attachments, setAttachments] = useState([]);
 
+  // Ref into RecipientInput so we can commit any uncommitted typed text
+  // before submitting — handles the case where the user types an address
+  // and clicks Send without first pressing Enter / comma.
+  const recipientInputRef = useRef<RecipientInputHandle | null>(null);
+
   const contactSuggestions = useMemo(() => contacts || [], [contacts]);
 
   const handleAttachFiles = (files) => {
@@ -47,8 +53,17 @@ function ComposePage() {
   };
 
   const handleSend = async () => {
+    // Commit any uncommitted typed text in the recipient input first, and
+    // use the returned array directly — React's pending state update from
+    // the ref's onChange call wouldn't be visible in this same handler.
+    const finalRecipients =
+      recipientInputRef.current?.flushPending() ?? recipients;
+    if (finalRecipients.length === 0) {
+      // Surface a helpful message instead of letting the backend reject it.
+      throw new Error("Please enter at least one recipient");
+    }
     await sendEmail({
-      to: recipients,
+      to: finalRecipients,
       subject,
       body,
       attachments,
@@ -57,8 +72,10 @@ function ComposePage() {
   };
 
   const handleSaveDraft = async () => {
+    const finalRecipients =
+      recipientInputRef.current?.flushPending() ?? recipients;
     await saveDraft({
-      to: recipients,
+      to: finalRecipients,
       subject,
       body,
       attachments,
@@ -76,6 +93,7 @@ function ComposePage() {
       <ComposeForm
         recipients={recipients}
         onRecipientsChange={setRecipients}
+        recipientInputRef={recipientInputRef}
         subject={subject}
         onSubjectChange={setSubject}
         body={body}

@@ -32,7 +32,10 @@ const ThreadList = ({
   }
 
   const handleThreadClick = (threadId) => {
-    navigate(`/thread/${threadId}`);
+    // Thread IDs are mailbox+uid composites and may contain slashes (e.g.
+    // "[Gmail]/Sent Mail:807"). Encode so the route's `:threadId` matches a
+    // single path segment; useParams() decodes it back automatically.
+    navigate(`/thread/${encodeURIComponent(threadId)}`);
   };
 
   return (

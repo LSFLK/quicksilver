@@ -6,6 +6,7 @@ import ComposeActions from "./ComposeActions";
 const ComposeForm = ({
   recipients,
   onRecipientsChange,
+  recipientInputRef,
   subject,
   onSubjectChange,
   body,
@@ -34,6 +35,7 @@ const ComposeForm = ({
   return (
     <Box sx={{ p: 2 }}>
       <RecipientInput
+        ref={recipientInputRef}
         value={recipients}
         onChange={onRecipientsChange}
         suggestions={contacts}
