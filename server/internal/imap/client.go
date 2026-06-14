@@ -67,7 +67,12 @@ func (c *Client) connect(ctx context.Context) error {
 	}
 	conn.Timeout = c.timeout
 
-	if err := conn.Login(c.creds.Email, c.creds.Password); err != nil {
+	if c.creds.IsOAuth() {
+		if err := conn.Authenticate(newXOAUTH2(c.creds.Email, c.creds.AccessToken)); err != nil {
+			_ = conn.Logout()
+			return fmt.Errorf("imap xoauth2: %w", err)
+		}
+	} else if err := conn.Login(c.creds.Email, c.creds.Password); err != nil {
 		_ = conn.Logout()
 		return fmt.Errorf("imap login: %w", err)
 	}

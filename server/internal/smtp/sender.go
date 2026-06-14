@@ -88,11 +88,19 @@ func (s *Sender) Send(ctx context.Context, creds hmail.Credentials, msg hmail.Ou
 		}
 	}
 
+	// XOAUTH2 carries the bearer access token in the password slot; password
+	// auth uses PLAIN with the user's (app) password.
+	authType := mail.SMTPAuthPlain
+	secret := creds.Password
+	if creds.IsOAuth() {
+		authType = mail.SMTPAuthXOAUTH2
+		secret = creds.AccessToken
+	}
 	opts := []mail.Option{
 		mail.WithPort(creds.SMTPPort),
 		mail.WithUsername(creds.Email),
-		mail.WithPassword(creds.Password),
-		mail.WithSMTPAuth(mail.SMTPAuthPlain),
+		mail.WithPassword(secret),
+		mail.WithSMTPAuth(authType),
 		mail.WithTimeout(s.timeout),
 	}
 	if creds.SMTPSecure {

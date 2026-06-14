@@ -1,7 +1,9 @@
 import React, { useState } from "react";
-import { Box, Container, Typography, Link } from "@mui/material";
+import { Box, Container, Typography, Link, Button, Divider } from "@mui/material";
+import GoogleIcon from "@mui/icons-material/Google";
 import { useNavigate, Link as RouterLink } from "react-router-dom";
 import { useAuth } from "../../nonview/core/AuthContext";
+import { defaultBaseURL } from "../../nonview/api/client";
 import LoginForm from "../moles/LoginForm";
 
 function LoginPage() {
@@ -19,6 +21,13 @@ function LoginPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Hand off to the backend's server-side OAuth flow. This is a full-page
+  // navigation (not XHR): backend → Google consent → backend callback →
+  // /auth/callback with the JWT in the fragment.
+  const handleGoogleSignIn = () => {
+    window.location.href = `${defaultBaseURL()}/api/v1/auth/google/start`;
   };
 
   return (
@@ -50,6 +59,18 @@ function LoginPage() {
         </Typography>
 
         <LoginForm onSubmit={handleSubmit} loading={loading} />
+
+        <Divider sx={{ width: "100%", my: 2 }}>or</Divider>
+
+        <Button
+          fullWidth
+          variant="outlined"
+          startIcon={<GoogleIcon />}
+          onClick={handleGoogleSignIn}
+          sx={{ textTransform: "none" }}
+        >
+          Sign in with Google
+        </Button>
 
         <Box
           sx={{

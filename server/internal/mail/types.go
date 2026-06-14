@@ -5,9 +5,22 @@ package mail
 
 import "time"
 
+// Auth mechanisms for upstream IMAP/SMTP. AuthPassword uses LOGIN/PLAIN with a
+// password (or app password); AuthOAuth2 uses SASL XOAUTH2 with a bearer access
+// token (e.g. Google). An empty AuthType is treated as AuthPassword for
+// backward compatibility.
+const (
+	AuthPassword = "password"
+	AuthOAuth2   = "oauth2"
+)
+
 // Credentials captures everything the server needs to connect to a user's
 // upstream IMAP/SMTP provider on their behalf. SMTP credentials default to the
 // same username/password as IMAP unless the SMTP* fields override them.
+//
+// For OAuth2 (XOAUTH2) sessions, Password is empty and the bearer token lives
+// in AccessToken; RefreshToken/TokenExpiry let the server mint a fresh access
+// token when the connection is re-established after the token has expired.
 type Credentials struct {
 	Email      string `json:"email"`
 	Password   string `json:"password"`
@@ -17,7 +30,16 @@ type Credentials struct {
 	SMTPHost   string `json:"smtp_host"`
 	SMTPPort   int    `json:"smtp_port"`
 	SMTPSecure bool   `json:"smtp_secure"`
+
+	// OAuth2 (XOAUTH2) fields. Unused for password auth.
+	AuthType     string    `json:"auth_type,omitempty"`
+	AccessToken  string    `json:"access_token,omitempty"`
+	RefreshToken string    `json:"refresh_token,omitempty"`
+	TokenExpiry  time.Time `json:"token_expiry,omitempty"`
 }
+
+// IsOAuth reports whether these credentials use XOAUTH2 bearer-token auth.
+func (c Credentials) IsOAuth() bool { return c.AuthType == AuthOAuth2 }
 
 // Address is a person/email pair from RFC 5322 envelope fields.
 type Address struct {
