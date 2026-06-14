@@ -6,6 +6,7 @@ import { DataProvider } from "./nonview/core/DataContext";
 
 // Import page components
 import LoginPage from "./view/pages/LoginPage";
+import OAuthCallbackPage from "./view/pages/OAuthCallbackPage";
 import RegisterPage from "./view/pages/RegisterPage";
 import ForgotPasswordPage from "./view/pages/ForgotPasswordPage";
 import InboxPage from "./view/pages/InboxPage";
@@ -29,6 +30,7 @@ function App() {
           <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/auth/callback" element={<OAuthCallbackPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 

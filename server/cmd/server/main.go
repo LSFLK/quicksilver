@@ -16,6 +16,7 @@ import (
 	"quicksilver/server/internal/config"
 	apihttp "quicksilver/server/internal/http"
 	applog "quicksilver/server/internal/log"
+	"quicksilver/server/internal/oauth"
 	"quicksilver/server/internal/session"
 	"quicksilver/server/internal/smtp"
 )
@@ -61,6 +62,13 @@ func main() {
 	sessions := session.NewStore(bgCtx, sealer, cfg.SessionIdleTTL, cfg.SessionSweepInt, cfg.IMAPTimeout, logger)
 	sender := smtp.New(cfg.SMTPTimeout)
 
+	googleOAuth := oauth.NewGoogle(cfg.GoogleClientID, cfg.GoogleClientSecret, cfg.GoogleRedirectURL)
+	if googleOAuth.Enabled() {
+		// Keep XOAUTH2 sessions alive across reconnects by refreshing tokens.
+		sessions.SetTokenRefresher(googleOAuth)
+		logger.Info("google oauth enabled", "redirect_url", cfg.GoogleRedirectURL)
+	}
+
 	router := apihttp.NewRouter(apihttp.Deps{
 		Config:       cfg,
 		Logger:       logger,
@@ -70,6 +78,7 @@ func main() {
 		Issuer:       issuer,
 		Sealer:       sealer,
 		Sender:       sender,
+		OAuth:        googleOAuth,
 		RateLimitCtx: bgCtx,
 	})
 

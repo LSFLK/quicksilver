@@ -11,6 +11,7 @@ import (
 	"quicksilver/server/internal/config"
 	"quicksilver/server/internal/http/handlers"
 	"quicksilver/server/internal/http/middleware"
+	"quicksilver/server/internal/oauth"
 	"quicksilver/server/internal/session"
 	"quicksilver/server/internal/smtp"
 )
@@ -25,6 +26,9 @@ type Deps struct {
 	Issuer   *auth.Issuer
 	Sealer   *session.Sealer
 	Sender   *smtp.Sender
+	// OAuth is the Google OAuth provider. When nil or disabled, the OAuth login
+	// endpoints are not registered.
+	OAuth *oauth.Provider
 	// RateLimitCtx scopes the rate limiter's background reaper. When the
 	// context is cancelled, the limiter stops reaping idle IP entries.
 	RateLimitCtx context.Context
@@ -57,6 +61,20 @@ func NewRouter(d Deps) http.Handler {
 			r.Post("/auth/login", authH.Login)
 		})
 		r.With(requireSession).Post("/auth/logout", authH.Logout)
+
+		// Google OAuth login (only when configured). These are top-level
+		// browser navigations, not XHR, so they sit outside the JWT-guarded group.
+		if d.OAuth != nil && d.OAuth.Enabled() {
+			oauthH := &handlers.OAuth{
+				Provider:         d.OAuth,
+				Sessions:         d.Sessions,
+				Issuer:           d.Issuer,
+				FrontendCallback: d.Config.FrontendOAuthCallback,
+				Logger:           d.Logger,
+			}
+			r.Get("/auth/google/start", oauthH.Start)
+			r.Get("/auth/google/callback", oauthH.Callback)
+		}
 
 		// Mailboxes & messages (all require a valid session).
 		r.Group(func(r chi.Router) {

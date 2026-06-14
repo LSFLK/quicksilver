@@ -53,6 +53,9 @@ interface AuthContextValue {
   loading: boolean;
   apiClient: APIClient;
   login: (email: string, password: string) => Promise<CurrentUser>;
+  // Completes a Google OAuth sign-in: the backend has already issued the JWT
+  // and authenticated IMAP/SMTP via XOAUTH2; we just persist the session.
+  loginWithOAuth: (token: string, email: string) => CurrentUser;
   register: (data: RegistrationData) => Promise<CurrentUser>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ message: string }>;
@@ -198,6 +201,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     [performLogin],
   );
 
+  const loginWithOAuth = useCallback(
+    (token: string, email: string): CurrentUser => {
+      // OAuth login is Google-only; the IMAP/SMTP endpoints are fixed and the
+      // password is never held (XOAUTH2 bearer tokens live server-side).
+      const profile: MailProfile = {
+        name: email,
+        email,
+        emailServiceProvider: "gmail-oauth",
+        emailAddress: email,
+        imapHost: "imap.gmail.com",
+        imapPort: 993,
+        imapSecure: true,
+        smtpHost: "smtp.gmail.com",
+        smtpPort: 587,
+        smtpSecure: false,
+      };
+      return persistSession(token, profile);
+    },
+    [persistSession],
+  );
+
   const register = useCallback(
     async (data: RegistrationData): Promise<CurrentUser> => {
       const profile: MailProfile = {
@@ -261,6 +285,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     loading,
     apiClient,
     login,
+    loginWithOAuth,
     register,
     logout,
     resetPassword,

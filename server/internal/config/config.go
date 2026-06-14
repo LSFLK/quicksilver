@@ -38,6 +38,18 @@ type Config struct {
 
 	RateLimitLoginPerMin int `envconfig:"RATE_LIMIT_LOGIN_PER_MIN" default:"10"`
 
+	// Google OAuth (optional). When GoogleClientID is empty, the OAuth login
+	// endpoints are disabled and password login is the only path.
+	GoogleClientID     string `envconfig:"GOOGLE_OAUTH_CLIENT_ID"`
+	GoogleClientSecret string `envconfig:"GOOGLE_OAUTH_CLIENT_SECRET"`
+	// GoogleRedirectURL must exactly match an Authorized redirect URI registered
+	// in the Google Cloud console, e.g.
+	//   http://localhost:3000/api/v1/auth/google/callback
+	GoogleRedirectURL string `envconfig:"GOOGLE_OAUTH_REDIRECT_URL"`
+	// FrontendOAuthCallback is the SPA URL the backend redirects to after a
+	// successful exchange; it receives the JWT in the URL fragment.
+	FrontendOAuthCallback string `envconfig:"FRONTEND_OAUTH_CALLBACK" default:"http://localhost:3000/quicksilver/auth/callback"`
+
 	TLSCert string `envconfig:"TLS_CERT"`
 	TLSKey  string `envconfig:"TLS_KEY"`
 

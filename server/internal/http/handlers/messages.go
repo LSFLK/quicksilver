@@ -175,7 +175,7 @@ func (h *Messages) Send(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.Logger, httpx.NewAPIError(http.StatusBadRequest, httpx.CodeBadRequest, "to, subject, and a body are required", nil))
 		return
 	}
-	creds, err := sess.Credentials(h.Sealer)
+	creds, err := h.Sessions.FreshCredentials(r.Context(), sess)
 	if err != nil {
 		httpx.WriteError(w, r, h.Logger, httpx.NewAPIError(http.StatusInternalServerError, httpx.CodeInternal, "unseal credentials", err))
 		return
