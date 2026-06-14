@@ -77,6 +77,8 @@ export interface MailboxListResponse {
 export interface MessageListResponse {
   messages: Envelope[];
   next_before?: number;
+  // Total messages in the mailbox (independent of the page), for "1–50 of N".
+  total?: number;
 }
 
 export interface APIErrorBody {

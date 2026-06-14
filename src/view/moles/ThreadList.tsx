@@ -1,5 +1,7 @@
 import React, { useEffect, useRef } from "react";
-import { Box, CircularProgress } from "@mui/material";
+import { Box, CircularProgress, IconButton, Typography } from "@mui/material";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import { useNavigate } from "react-router-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import ThreadListItem from "./ThreadListItem";
@@ -15,14 +17,23 @@ const ThreadList = ({
   loading = false,
   emptyMessage = "No emails found",
   selectedThreadId = null,
-  // Infinite scroll: onLoadMore is invoked when the user nears the end of the
-  // list and hasMore is true. loadingMore shows a footer spinner.
-  onLoadMore = undefined,
-  hasMore = false,
-  loadingMore = false,
+  // Gmail-style pager. When onNext/onPrev are provided and total > 0, a
+  // "start–end of total" bar with prev/next arrows is shown above the list.
+  page = 0,
+  total = 0,
+  pageSize = 50,
+  onNext = undefined,
+  onPrev = undefined,
+  pageLoading = false,
 }) => {
   const navigate = useNavigate();
   const parentRef = useRef(null);
+
+  // Jump back to the top of the list whenever the page changes, so a new page
+  // starts at its first message rather than wherever the previous one scrolled.
+  useEffect(() => {
+    if (parentRef.current) parentRef.current.scrollTop = 0;
+  }, [page]);
 
   const rowVirtualizer = useVirtualizer({
     count: threads?.length || 0,
@@ -32,24 +43,6 @@ const ThreadList = ({
     // doesn't flash blank space.
     overscan: 8,
   });
-
-  const items = rowVirtualizer.getVirtualItems();
-  const lastIndex = items.length ? items[items.length - 1].index : -1;
-
-  // When the last row scrolls into view (overscan included), pull the next
-  // page. Depending on the primitive lastIndex keeps this from firing on every
-  // virtualizer recalculation.
-  useEffect(() => {
-    if (lastIndex < 0) return;
-    if (
-      lastIndex >= (threads?.length || 0) - 1 &&
-      hasMore &&
-      !loadingMore &&
-      onLoadMore
-    ) {
-      onLoadMore();
-    }
-  }, [lastIndex, threads?.length, hasMore, loadingMore, onLoadMore]);
 
   if (loading) {
     return (
@@ -77,63 +70,97 @@ const ThreadList = ({
     navigate(`/thread/${encodeURIComponent(threadId)}`);
   };
 
+  const items = rowVirtualizer.getVirtualItems();
+
+  // Pager math. start/end are 1-based and reflect the rows actually shown.
+  const showPager = !!(onNext || onPrev) && total > 0;
+  const start = page * pageSize + 1;
+  const end = page * pageSize + threads.length;
+  const canPrev = page > 0 && !pageLoading;
+  const canNext = end < total && !pageLoading;
+
   return (
-    // The scroll container. Only the rows inside the viewport are mounted, so
-    // this stays at 60fps even over a 50k-message mailbox.
     <Box
-      ref={parentRef}
       sx={{
         height: "100%",
-        overflowY: "auto",
+        display: "flex",
+        flexDirection: "column",
         backgroundColor: "background.paper",
       }}
     >
-      <Box
-        sx={{
-          height: `${rowVirtualizer.getTotalSize()}px`,
-          position: "relative",
-          width: "100%",
-        }}
-      >
-        {items.map((virtualRow) => {
-          const thread = threads[virtualRow.index];
-          return (
-            <Box
-              key={thread.id}
-              data-index={virtualRow.index}
-              ref={rowVirtualizer.measureElement}
-              sx={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                transform: `translateY(${virtualRow.start}px)`,
-              }}
-            >
-              <ThreadListItem
-                thread={thread}
-                isSelected={thread.id === selectedThreadId}
-                onClick={handleThreadClick}
-              />
-            </Box>
-          );
-        })}
-      </Box>
-
-      {/* Footer spinner shown while the next page is loading. Sits below the
-          virtualized sizer (which already reserves the full list height). */}
-      {loadingMore && (
+      {showPager && (
         <Box
           sx={{
             display: "flex",
-            justifyContent: "center",
             alignItems: "center",
-            p: 2,
+            justifyContent: "flex-end",
+            gap: 1,
+            px: 2,
+            py: 0.5,
+            borderBottom: 1,
+            borderColor: "divider",
+            minHeight: 44,
           }}
         >
-          <CircularProgress size={24} />
+          {pageLoading && <CircularProgress size={16} sx={{ mr: 1 }} />}
+          <Typography variant="body2" color="text.secondary">
+            {start.toLocaleString()}–{end.toLocaleString()} of{" "}
+            {total.toLocaleString()}
+          </Typography>
+          <IconButton
+            size="small"
+            aria-label="Newer messages"
+            disabled={!canPrev}
+            onClick={() => onPrev && onPrev()}
+          >
+            <ChevronLeftIcon />
+          </IconButton>
+          <IconButton
+            size="small"
+            aria-label="Older messages"
+            disabled={!canNext}
+            onClick={() => onNext && onNext()}
+          >
+            <ChevronRightIcon />
+          </IconButton>
         </Box>
       )}
+
+      {/* The scroll container. Only the rows inside the viewport are mounted,
+          so this stays at 60fps even over a large mailbox. */}
+      <Box ref={parentRef} sx={{ flex: 1, overflowY: "auto" }}>
+        <Box
+          sx={{
+            height: `${rowVirtualizer.getTotalSize()}px`,
+            position: "relative",
+            width: "100%",
+          }}
+        >
+          {items.map((virtualRow) => {
+            const thread = threads[virtualRow.index];
+            return (
+              <Box
+                key={thread.id}
+                data-index={virtualRow.index}
+                ref={rowVirtualizer.measureElement}
+                sx={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              >
+                <ThreadListItem
+                  thread={thread}
+                  isSelected={thread.id === selectedThreadId}
+                  onClick={handleThreadClick}
+                />
+              </Box>
+            );
+          })}
+        </Box>
+      </Box>
     </Box>
   );
 };

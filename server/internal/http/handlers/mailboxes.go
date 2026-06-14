@@ -63,12 +63,12 @@ func (h *Mailboxes) ListMessages(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, r, h.Logger, httpx.NewAPIError(http.StatusBadGateway, httpx.CodeUpstreamFailed, "imap connect", err))
 		return
 	}
-	envelopes, err := c.ListMessages(r.Context(), mailbox, limit, uint32(before))
+	envelopes, total, err := c.ListMessages(r.Context(), mailbox, limit, uint32(before))
 	if err != nil {
 		httpx.WriteError(w, r, h.Logger, httpx.NewAPIError(http.StatusBadGateway, httpx.CodeUpstreamFailed, "list messages", err))
 		return
 	}
-	resp := map[string]any{"messages": envelopes}
+	resp := map[string]any{"messages": envelopes, "total": total}
 	if len(envelopes) > 0 {
 		resp["next_before"] = envelopes[len(envelopes)-1].UID
 	}

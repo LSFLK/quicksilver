@@ -175,24 +175,27 @@ func (c *Client) selectMailbox(name string, readOnly bool) error {
 
 // ListMessages returns up to limit envelopes from the given mailbox, newest first.
 // If before > 0, only messages with UID < before are returned (cursor-style paging).
-func (c *Client) ListMessages(ctx context.Context, mailbox string, limit int, before uint32) ([]hmail.Envelope, error) {
+// The returned total is the mailbox's full message count (independent of the
+// page), suitable for a "1–50 of N" pager.
+func (c *Client) ListMessages(ctx context.Context, mailbox string, limit int, before uint32) ([]hmail.Envelope, uint32, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if err := c.ensureLive(ctx); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	if err := c.selectMailbox(mailbox, true); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	mbox, err := c.conn.Select(mailbox, true)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	if mbox.Messages == 0 {
-		return []hmail.Envelope{}, nil
+	total := mbox.Messages
+	if total == 0 {
+		return []hmail.Envelope{}, 0, nil
 	}
 
 	// Fetch the highest UID first; if before is set, cap the upper bound there.
@@ -204,10 +207,10 @@ func (c *Client) ListMessages(ctx context.Context, mailbox string, limit int, be
 	}
 	uids, err := c.conn.UidSearch(criteria)
 	if err != nil {
-		return nil, fmt.Errorf("uid search: %w", err)
+		return nil, 0, fmt.Errorf("uid search: %w", err)
 	}
 	if len(uids) == 0 {
-		return []hmail.Envelope{}, nil
+		return []hmail.Envelope{}, total, nil
 	}
 	// Newest first; take the last `limit` UIDs.
 	if len(uids) > limit {
@@ -226,13 +229,13 @@ func (c *Client) ListMessages(ctx context.Context, mailbox string, limit int, be
 		envelopes = append(envelopes, envelopeFrom(m))
 	}
 	if err := <-fetchDone; err != nil {
-		return nil, fmt.Errorf("fetch envelopes: %w", err)
+		return nil, 0, fmt.Errorf("fetch envelopes: %w", err)
 	}
 	// Sort newest-first by UID descending.
 	for i, j := 0, len(envelopes)-1; i < j; i, j = i+1, j-1 {
 		envelopes[i], envelopes[j] = envelopes[j], envelopes[i]
 	}
-	return envelopes, nil
+	return envelopes, total, nil
 }
 
 func envelopeFrom(m *imap.Message) hmail.Envelope {

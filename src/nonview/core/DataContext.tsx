@@ -86,12 +86,16 @@ interface DataContextValue {
   loading: boolean;
   error: string | null;
   unreadCount: number;
-  // Pagination state keyed by role ("inbox" | "sent" | "drafts" | "trash").
-  // hasMore[role] is false once the server has no older messages to give.
-  hasMore: Record<string, boolean>;
-  loadingMore: Record<string, boolean>;
-  // Fetch the next page of older messages for a folder and append them.
-  loadMore: (role: string) => Promise<void>;
+  // Page-based pagination keyed by role ("inbox" | "sent" | "drafts" | "trash").
+  // page[role] is the 0-based current page; total[role] is the mailbox's full
+  // message count; pageLoading[role] is true while a page is being fetched.
+  page: Record<string, number>;
+  total: Record<string, number>;
+  pageLoading: Record<string, boolean>;
+  pageSize: number;
+  // Move one page older / newer, replacing the folder's visible messages.
+  nextPage: (role: string) => Promise<void>;
+  prevPage: (role: string) => Promise<void>;
   refresh: () => Promise<void>;
   getThread: (id: string) => Thread | undefined;
   getMessages: (threadId: string) => Promise<ThreadMessage[]>;
@@ -122,20 +126,8 @@ const ROLE_NAMES: Record<string, string[]> = {
   trash: ["Trash", "Deleted Items", "[Gmail]/Trash"],
 };
 
-// How many envelopes to request per page. A full page implies more may exist;
-// a short page means we've reached the end of the mailbox.
+// How many envelopes to show per page (matches the backend default).
 const PAGE_SIZE = 50;
-
-// Smallest UID among loaded threads — the fallback "before" cursor when the
-// server-supplied next_before isn't available yet (e.g. straight after a
-// cache hydrate, before the first network refresh sets it).
-function minUID(list: Thread[]): number | undefined {
-  let min: number | undefined;
-  for (const t of list) {
-    if (t.uid > 0 && (min === undefined || t.uid < min)) min = t.uid;
-  }
-  return min;
-}
 
 // Resolves the actual mailbox names served by the user's provider against
 // well-known role hints (set by the IMAP \\Special-Use flags or, failing that,
@@ -233,12 +225,13 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Pagination bookkeeping per folder role. `cursors` holds the next `before`
-  // UID to request; `hasMore` whether the server still has older messages;
-  // `loadingMore` guards against overlapping page fetches.
-  const [cursors, setCursors] = useState<Record<string, number | undefined>>({});
-  const [hasMore, setHasMore] = useState<Record<string, boolean>>({});
-  const [loadingMore, setLoadingMore] = useState<Record<string, boolean>>({});
+  // Pagination bookkeeping per folder role.
+  const [page, setPage] = useState<Record<string, number>>({});
+  const [total, setTotal] = useState<Record<string, number>>({});
+  const [pageLoading, setPageLoading] = useState<Record<string, boolean>>({});
+  // pageCursors[role][i] is the `before` UID used to fetch page i (index 0 is
+  // undefined = newest). Discovered as the user pages forward, reused for back.
+  const pageCursors = useRef<Record<string, (number | undefined)[]>>({});
 
   // Cache of role → mailbox name resolution so handlers can post to the right
   // folder without a fresh mailboxes call each time.
@@ -296,9 +289,9 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             : Promise.resolve({ messages: [] }),
         ]);
 
-        // Apply a folder's fresh first page to React state and the cache, and
-        // record its pagination cursor — but only when the fetch succeeded, so
-        // a rejected fetch never clobbers good cached rows with an empty list.
+        // Apply a folder's fresh first page (page 0) to React state and the
+        // cache, and seed its pagination bookkeeping — but only when the fetch
+        // succeeded, so a rejected fetch never clobbers good cached rows.
         const apply = (
           idx: number,
           role: string,
@@ -311,8 +304,10 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
           const fresh = msgs.map((e) => envelopeToThread(e, mailbox || ""));
           set(fresh);
           void writeThreads(account, role, fresh);
-          setCursors((c) => ({ ...c, [role]: val.next_before }));
-          setHasMore((h) => ({ ...h, [role]: msgs.length >= PAGE_SIZE }));
+          // Reset to page 0; cursor for page 1 is this page's next_before.
+          pageCursors.current[role] = [undefined, val.next_before];
+          setPage((p) => ({ ...p, [role]: 0 }));
+          setTotal((t) => ({ ...t, [role]: val.total ?? msgs.length }));
         };
 
         apply(0, "inbox", roles.inbox, setThreads);
@@ -360,64 +355,87 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
 
   const refresh = useCallback(() => loadAll(), [loadAll]);
 
-  const loadMore = useCallback(
-    async (role: string): Promise<void> => {
+  // Maps a role to its current thread array's state setter.
+  const setterForRole = useCallback(
+    (role: string): React.Dispatch<React.SetStateAction<Thread[]>> | null => {
+      switch (role) {
+        case "inbox":
+          return setThreads;
+        case "sent":
+          return setSentThreads;
+        case "trash":
+          return setTrashedThreads;
+        case "drafts":
+          return setDrafts;
+        default:
+          return null;
+      }
+    },
+    [],
+  );
+
+  // Fetch one page of a folder and REPLACE the visible messages with it (unlike
+  // infinite scroll, which appends). `target` is the destination page index;
+  // `before` is the cursor for that page (undefined = newest/page 0).
+  const fetchPage = useCallback(
+    async (role: string, target: number, before: number | undefined): Promise<void> => {
       const mailbox = rolesRef.current[role];
-      if (!mailbox) return;
-      if (loadingMore[role]) return; // a page fetch is already in flight
-      if (hasMore[role] === false) return; // reached the end
+      const set = setterForRole(role);
+      if (!mailbox || !set) return;
 
-      // Pick the right folder's array + setter.
-      const map: Record<
-        string,
-        [Thread[], React.Dispatch<React.SetStateAction<Thread[]>>]
-      > = {
-        inbox: [threads, setThreads],
-        sent: [sentThreads, setSentThreads],
-        trash: [trashedThreads, setTrashedThreads],
-        drafts: [drafts, setDrafts],
-      };
-      const entry = map[role];
-      if (!entry) return;
-      const [current, set] = entry;
-
-      const before = cursors[role] ?? minUID(current);
-      if (!before) return; // nothing to page from
-
-      setLoadingMore((m) => ({ ...m, [role]: true }));
+      setPageLoading((m) => ({ ...m, [role]: true }));
       try {
         const resp = await mailboxesAPI.listMessages(apiClient, mailbox, {
           limit: PAGE_SIZE,
-          before,
+          ...(before ? { before } : {}),
         });
         const msgs = resp.messages || [];
         const fresh = msgs.map((e) => envelopeToThread(e, mailbox));
-        // Append, de-duping by id in case a message shifted pages between calls.
-        const seen = new Set(current.map((t) => t.id));
-        const merged = [...current, ...fresh.filter((t) => !seen.has(t.id))];
-        set(merged);
-        void writeThreads(account, role, merged);
-        setCursors((c) => ({ ...c, [role]: resp.next_before }));
-        setHasMore((h) => ({ ...h, [role]: msgs.length >= PAGE_SIZE }));
+        set(fresh);
+        setPage((p) => ({ ...p, [role]: target }));
+        if (resp.total !== undefined) {
+          setTotal((t) => ({ ...t, [role]: resp.total as number }));
+        }
+        // Record the cursor for the *next* page so a later nextPage knows it.
+        const cursors = pageCursors.current[role] || [undefined];
+        cursors[target + 1] = resp.next_before;
+        pageCursors.current[role] = cursors;
+        // Only page 0 is mirrored to the offline cache (the "newest" view).
+        if (target === 0) void writeThreads(account, role, fresh);
       } catch (err) {
         if ((err as { name?: string })?.name !== "AbortError") {
-          setError((err as Error).message || "Failed to load more mail");
+          setError((err as Error).message || "Failed to load page");
         }
       } finally {
-        setLoadingMore((m) => ({ ...m, [role]: false }));
+        setPageLoading((m) => ({ ...m, [role]: false }));
       }
     },
-    [
-      apiClient,
-      account,
-      threads,
-      sentThreads,
-      trashedThreads,
-      drafts,
-      cursors,
-      hasMore,
-      loadingMore,
-    ],
+    [apiClient, account, setterForRole],
+  );
+
+  const nextPage = useCallback(
+    async (role: string): Promise<void> => {
+      if (pageLoading[role]) return;
+      const cur = page[role] ?? 0;
+      const target = cur + 1;
+      // Don't page past the end.
+      if (target * PAGE_SIZE >= (total[role] ?? 0)) return;
+      const before = (pageCursors.current[role] || [])[target];
+      await fetchPage(role, target, before);
+    },
+    [page, total, pageLoading, fetchPage],
+  );
+
+  const prevPage = useCallback(
+    async (role: string): Promise<void> => {
+      if (pageLoading[role]) return;
+      const cur = page[role] ?? 0;
+      if (cur <= 0) return;
+      const target = cur - 1;
+      const before = (pageCursors.current[role] || [])[target];
+      await fetchPage(role, target, before);
+    },
+    [page, pageLoading, fetchPage],
   );
 
   const allThreads = useMemo(
@@ -615,9 +633,12 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     loading,
     error,
     unreadCount,
-    hasMore,
-    loadingMore,
-    loadMore,
+    page,
+    total,
+    pageLoading,
+    pageSize: PAGE_SIZE,
+    nextPage,
+    prevPage,
     refresh,
     getThread,
     getMessages,
