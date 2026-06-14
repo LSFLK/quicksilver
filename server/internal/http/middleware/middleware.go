@@ -12,7 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5/middleware"
 
-	applog "handa/server/internal/log"
+	applog "quicksilver/server/internal/log"
 )
 
 // RequestID attaches a stable identifier to each request, exposing it as the

@@ -1,5 +1,5 @@
 // Package imap wraps github.com/emersion/go-imap with a thread-safe,
-// reconnect-capable client tailored to the Handa API.
+// reconnect-capable client tailored to the Quicksilver API.
 //
 // A go-imap *client.Client is not safe for concurrent use; this wrapper
 // serialises operations via an internal mutex. Connections that look dead are
@@ -24,7 +24,7 @@ import (
 	_ "github.com/emersion/go-message/charset" // register common charsets
 	gomail "github.com/emersion/go-message/mail"
 
-	hmail "handa/server/internal/mail"
+	hmail "quicksilver/server/internal/mail"
 )
 
 // Client is a thread-safe, reconnecting IMAP client.

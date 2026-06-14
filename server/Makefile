@@ -1,6 +1,6 @@
 .PHONY: build run test test-race lint tidy vet fmt clean docker
 
-BINARY := bin/handa-server
+BINARY := bin/quicksilver-server
 PKG    := ./...
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
@@ -34,4 +34,4 @@ clean:
 	rm -rf bin
 
 docker:
-	docker build -t handa-server:$(VERSION) .
+	docker build -t quicksilver-server:$(VERSION) .

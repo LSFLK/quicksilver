@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"handa/server/internal/imap"
-	"handa/server/internal/mail"
+	"quicksilver/server/internal/imap"
+	"quicksilver/server/internal/mail"
 )
 
 // Session is one authenticated user. Mutations are serialised via the embedded

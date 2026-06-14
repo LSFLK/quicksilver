@@ -2,7 +2,7 @@
 //
 // Each session holds the IMAP credentials sealed via AES-GCM so a memory dump
 // of the process doesn't trivially reveal them. The sealing key (32 bytes,
-// supplied via HANDA_SESSION_SEAL_KEY) is held only in this process.
+// supplied via QUICKSILVER_SESSION_SEAL_KEY) is held only in this process.
 package session
 
 import (
@@ -13,7 +13,7 @@ import (
 	"errors"
 	"fmt"
 
-	"handa/server/internal/mail"
+	"quicksilver/server/internal/mail"
 )
 
 // Sealer encrypts and decrypts mail.Credentials with AES-GCM.

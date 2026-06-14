@@ -10,12 +10,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"handa/server/internal/http/middleware"
-	"handa/server/internal/httpx"
-	himap "handa/server/internal/imap"
-	"handa/server/internal/mail"
-	"handa/server/internal/session"
-	"handa/server/internal/smtp"
+	"quicksilver/server/internal/http/middleware"
+	"quicksilver/server/internal/httpx"
+	himap "quicksilver/server/internal/imap"
+	"quicksilver/server/internal/mail"
+	"quicksilver/server/internal/session"
+	"quicksilver/server/internal/smtp"
 )
 
 // Messages serves single-message read/write endpoints.

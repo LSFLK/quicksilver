@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strings"
 
-	"handa/server/internal/auth"
-	"handa/server/internal/httpx"
-	"handa/server/internal/session"
+	"quicksilver/server/internal/auth"
+	"quicksilver/server/internal/httpx"
+	"quicksilver/server/internal/session"
 )
 
 type ctxKey int

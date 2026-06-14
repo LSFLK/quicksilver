@@ -1,4 +1,4 @@
-module handa/server
+module quicksilver/server
 
 go 1.26.2
 

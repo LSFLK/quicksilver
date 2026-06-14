@@ -1,6 +1,6 @@
 # Component Architecture - Milestone 1
 
-This document outlines the component hierarchy for Handa, organized by component type. All components consume data from React DataContext and do not handle data loading directly.
+This document outlines the component hierarchy for Quicksilver, organized by component type. All components consume data from React DataContext and do not handle data loading directly.
 
 ## Component Types
 

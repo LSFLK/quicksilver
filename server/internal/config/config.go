@@ -1,6 +1,6 @@
 // Package config loads server configuration from environment variables.
 //
-// All settings are namespaced under HANDA_*. Required values cause boot to fail
+// All settings are namespaced under QUICKSILVER_*. Required values cause boot to fail
 // rather than running with insecure defaults.
 package config
 
@@ -14,7 +14,7 @@ import (
 	"github.com/kelseyhightower/envconfig"
 )
 
-const envPrefix = "HANDA"
+const envPrefix = "QUICKSILVER"
 
 // Config is the resolved server configuration.
 type Config struct {
@@ -61,22 +61,22 @@ func Load() (*Config, error) {
 
 func (c *Config) validate() error {
 	if len(c.JWTSecret) < 32 {
-		return errors.New("HANDA_JWT_SECRET must be at least 32 characters")
+		return errors.New("QUICKSILVER_JWT_SECRET must be at least 32 characters")
 	}
 	key, err := hex.DecodeString(c.SessionSealKey)
 	if err != nil {
-		return fmt.Errorf("HANDA_SESSION_SEAL_KEY must be hex-encoded: %w", err)
+		return fmt.Errorf("QUICKSILVER_SESSION_SEAL_KEY must be hex-encoded: %w", err)
 	}
 	if len(key) != 32 {
-		return errors.New("HANDA_SESSION_SEAL_KEY must decode to 32 bytes (64 hex chars)")
+		return errors.New("QUICKSILVER_SESSION_SEAL_KEY must decode to 32 bytes (64 hex chars)")
 	}
 	c.sessionSealKey = key
 
 	if (c.TLSCert == "") != (c.TLSKey == "") {
-		return errors.New("HANDA_TLS_CERT and HANDA_TLS_KEY must both be set or both empty")
+		return errors.New("QUICKSILVER_TLS_CERT and QUICKSILVER_TLS_KEY must both be set or both empty")
 	}
 	if c.RateLimitLoginPerMin <= 0 {
-		return errors.New("HANDA_RATE_LIMIT_LOGIN_PER_MIN must be positive")
+		return errors.New("QUICKSILVER_RATE_LIMIT_LOGIN_PER_MIN must be positive")
 	}
 	return nil
 }

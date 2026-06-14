@@ -47,7 +47,7 @@ const Sidebar = () => {
       {/* Logo/Brand */}
       <Box sx={{ p: 2, borderBottom: 1, borderColor: "divider" }}>
         <Typography variant="h5" fontWeight={600} color="primary">
-          Handa
+          Quicksilver
         </Typography>
       </Box>
 

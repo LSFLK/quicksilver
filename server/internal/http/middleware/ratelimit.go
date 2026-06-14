@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/time/rate"
 
-	"handa/server/internal/httpx"
+	"quicksilver/server/internal/httpx"
 )
 
 // PerIPRateLimit returns a middleware that limits requests per remote IP using

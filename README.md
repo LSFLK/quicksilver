@@ -1,4 +1,4 @@
-# Handa
+# Quicksilver
 
 A modern React-based email client implementing the Email 2.0 vision.
 
@@ -18,7 +18,7 @@ See [docs/Email-2.md](docs/Email-2.md) for the complete vision.
 
 ## Architecture
 
-Handa is two cooperating pieces in one monorepo:
+Quicksilver is two cooperating pieces in one monorepo:
 
 ```
 ┌──────────────────┐  HTTPS+JWT  ┌──────────────────┐  IMAP/TLS  ┌──────────────┐
@@ -39,7 +39,7 @@ See [`server/README.md`](server/README.md) for the backend in detail.
 
 - **Frontend**: React 19, TypeScript, Vite, MUI, React Router 7
 - **Backend**: Go 1.23, chi router, go-imap, go-mail, JWT (HS256), AES-GCM session sealing, slog
-- **Auth**: Direct IMAP login — no separate Handa account. JWT-only storage in the browser; passwords never touch localStorage.
+- **Auth**: Direct IMAP login — no separate Quicksilver account. JWT-only storage in the browser; passwords never touch localStorage.
 
 ## Getting Started
 
@@ -58,8 +58,8 @@ npm install
 cd server
 cp .env.example .env
 # Generate real secrets (one per line; paste into .env):
-#   openssl rand -base64 48     → HANDA_JWT_SECRET
-#   openssl rand -hex 32        → HANDA_SESSION_SEAL_KEY
+#   openssl rand -base64 48     → QUICKSILVER_JWT_SECRET
+#   openssl rand -hex 32        → QUICKSILVER_SESSION_SEAL_KEY
 $EDITOR .env
 go mod download
 cd ..
@@ -80,19 +80,19 @@ cd server && make run
 npm run dev
 ```
 
-Then open **http://localhost:3000/handa/** in your browser.
+Then open **http://localhost:3000/quicksilver/** in your browser.
 
 ### Available scripts
 
 | Command             | Stack    | Description                                                |
 | ------------------- | -------- | ---------------------------------------------------------- |
-| `npm run dev`       | frontend | Vite dev server (http://localhost:3000/handa/, HMR)        |
+| `npm run dev`       | frontend | Vite dev server (http://localhost:3000/quicksilver/, HMR)        |
 | `npm start`         | frontend | Alias for `npm run dev`                                    |
 | `npm run build`     | frontend | Production bundle → `build/`                               |
 | `npm run preview`   | frontend | Preview the production build locally                       |
 | `npm run typecheck` | frontend | `tsc --noEmit` (does not block `build`)                    |
 | `make run`          | backend  | `go run ./cmd/server` (run from `server/`)                 |
-| `make build`        | backend  | Build → `server/bin/handa-server`                          |
+| `make build`        | backend  | Build → `server/bin/quicksilver-server`                          |
 | `make test`         | backend  | `go test ./...`                                            |
 | `make test-race`    | backend  | Same, with the race detector                               |
 | `make docker`       | backend  | Multi-stage distroless image                               |

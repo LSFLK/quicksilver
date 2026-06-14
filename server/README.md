@@ -1,6 +1,6 @@
-# Handa Server
+# Quicksilver Server
 
-Go backend that fronts arbitrary email providers via **IMAP** (read) and **SMTP** (send), exposing a JSON API consumed by the Handa frontend.
+Go backend that fronts arbitrary email providers via **IMAP** (read) and **SMTP** (send), exposing a JSON API consumed by the Quicksilver frontend.
 
 The server holds **no mail in its own storage** — IMAP is the source of truth. Per-user credentials are kept in process memory only, sealed with AES-GCM, and dropped when the session expires.
 
@@ -9,8 +9,8 @@ The server holds **no mail in its own storage** — IMAP is the source of truth.
 ```bash
 cp .env.example .env
 # Generate real secrets:
-#   openssl rand -base64 48          # → HANDA_JWT_SECRET
-#   openssl rand -hex 32             # → HANDA_SESSION_SEAL_KEY
+#   openssl rand -base64 48          # → QUICKSILVER_JWT_SECRET
+#   openssl rand -hex 32             # → QUICKSILVER_SESSION_SEAL_KEY
 $EDITOR .env
 
 go mod tidy
@@ -29,7 +29,7 @@ curl -s http://localhost:8080/readyz
 ```
 cmd/server/main.go        entrypoint, graceful shutdown
 internal/
-  config/                 env-driven config (HANDA_* vars)
+  config/                 env-driven config (QUICKSILVER_* vars)
   log/                    slog setup, credential redaction
   http/
     router.go             chi router
@@ -56,7 +56,7 @@ Mail and auth endpoints land in subsequent phases. See repo root design docs for
 
 | Target          | What it does                          |
 |-----------------|---------------------------------------|
-| `make build`    | Compile to `bin/handa-server`         |
+| `make build`    | Compile to `bin/quicksilver-server`         |
 | `make run`      | `go run ./cmd/server`                 |
 | `make test`     | `go test ./...`                       |
 | `make test-race`| Same with `-race -count=1`            |
@@ -68,8 +68,8 @@ Mail and auth endpoints land in subsequent phases. See repo root design docs for
 
 ## Production notes
 
-- **No defaults for secrets.** `HANDA_JWT_SECRET` and `HANDA_SESSION_SEAL_KEY` are required; the process refuses to start without them.
-- **Run behind TLS.** Either supply `HANDA_TLS_CERT`/`HANDA_TLS_KEY` or terminate TLS at a proxy/load balancer.
-- **Restrict CORS.** Set `HANDA_ALLOWED_ORIGINS` to the deployed frontend origin(s); wildcards are deliberately not supported.
+- **No defaults for secrets.** `QUICKSILVER_JWT_SECRET` and `QUICKSILVER_SESSION_SEAL_KEY` are required; the process refuses to start without them.
+- **Run behind TLS.** Either supply `QUICKSILVER_TLS_CERT`/`QUICKSILVER_TLS_KEY` or terminate TLS at a proxy/load balancer.
+- **Restrict CORS.** Set `QUICKSILVER_ALLOWED_ORIGINS` to the deployed frontend origin(s); wildcards are deliberately not supported.
 - **Single-instance sessions.** v1 stores sessions in process memory. To scale horizontally, run behind a sticky load balancer or migrate the session store to Redis.
 - **Image is distroless non-root** with a stripped, static binary.

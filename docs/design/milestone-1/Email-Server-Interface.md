@@ -2,13 +2,13 @@
 
 ## Introduction
 
-Handa is designed as a unified email client that provides a consistent, modern interface across multiple email providers. Rather than being tied to a single service, Handa can connect to any email service that supports IMAP/SMTP, including Gmail, Outlook, Yahoo, and custom mail servers.
+Quicksilver is designed as a unified email client that provides a consistent, modern interface across multiple email providers. Rather than being tied to a single service, Quicksilver can connect to any email service that supports IMAP/SMTP, including Gmail, Outlook, Yahoo, and custom mail servers.
 
 **This document focuses on Milestone 1**, which establishes the foundational architecture for email provider integration. Milestone 1 delivers a working email client with direct IMAP/SMTP connections, allowing users to connect their email accounts and view/send messages. **This implementation is optimized for Vercel deployment**, using browser localStorage and serverless functions to eliminate database dependencies.
 
 ### Milestone 1 Goals
 
-1. **User Registration & Authentication**: Allow users to register and log in to Handa
+1. **User Registration & Authentication**: Allow users to register and log in to Quicksilver
 2. **Email Service Configuration**: Collect email provider credentials during registration
 3. **IMAP/SMTP Support**: Enable direct connections using app-specific passwords
 4. **Basic Email Operations**: Read emails, send emails, basic folder management
@@ -42,7 +42,7 @@ This document covers the foundational implementation:
 
 ### Why Multiple Providers?
 
-Supporting multiple email providers allows Handa to:
+Supporting multiple email providers allows Quicksilver to:
 
 - Give users freedom to use Gmail, Outlook, Yahoo, or any custom IMAP/SMTP provider
 - Provide a unified interface regardless of email provider
@@ -51,7 +51,7 @@ Supporting multiple email providers allows Handa to:
 
 ## Architecture Overview
 
-Handa's Milestone 1 architecture is optimized for Vercel deployment with three main layers:
+Quicksilver's Milestone 1 architecture is optimized for Vercel deployment with three main layers:
 
 1. **Frontend Layer**: React application deployed to Vercel's edge network
 2. **Backend Layer**: Vercel Serverless Functions that handle IMAP/SMTP operations
@@ -61,7 +61,7 @@ All user data is stored in browser localStorage - no database server required. T
 
 ### What We Build
 
-**Handa Frontend** (Custom Implementation)
+**Quicksilver Frontend** (Custom Implementation)
 
 - React-based single-page application
 - Deployed to Vercel's global edge network
@@ -70,7 +70,7 @@ All user data is stored in browser localStorage - no database server required. T
 - State management with localStorage persistence
 - Responsive design for desktop and mobile
 
-**Handa Backend** (Custom Implementation)
+**Quicksilver Backend** (Custom Implementation)
 
 - Vercel Serverless Functions (API routes)
 - Stateless request handlers
@@ -111,7 +111,7 @@ All user data is stored in browser localStorage - no database server required. T
 ```plaintext
 ┌─────────────────────┐
 │                     │
-│  Handa UI     │  ← We Build This
+│  Quicksilver UI     │  ← We Build This
 │  (React Frontend)   │
 │                     │
 └──────────┬──────────┘
@@ -120,7 +120,7 @@ All user data is stored in browser localStorage - no database server required. T
            │
 ┌──────────▼──────────┐
 │                     │
-│  Handa API    │  ← We Build This
+│  Quicksilver API    │  ← We Build This
 │  (Node.js Backend)  │
 │                     │
 └──────────┬──────────┘
@@ -143,8 +143,8 @@ All user data is stored in browser localStorage - no database server required. T
 
 | Component | Who Builds/Maintains | Our Responsibility |
 |-----------|---------------------|-------------------|
-| Frontend UI | Handa Team | Design, implement, and maintain all React components |
-| Backend API | Handa Team | Implement serverless API routes and business logic |
+| Frontend UI | Quicksilver Team | Design, implement, and maintain all React components |
+| Backend API | Quicksilver Team | Implement serverless API routes and business logic |
 | Data Storage | Browser localStorage | Store user profiles in browser (no database) |
 | IMAP/SMTP Connections | NPM Libraries + Our Config | Configure connections, handle errors, manage sessions |
 | Email Protocol | Standard (IETF) | Follow standards; use libraries for implementation |
@@ -194,7 +194,7 @@ SMTP is used for sending emails.
 
 ## Authentication Architecture
 
-Handa uses direct IMAP/SMTP connections with user-provided app-specific passwords. This approach provides immediate functionality, maximum compatibility, and works with any standard email provider without requiring OAuth app registration.
+Quicksilver uses direct IMAP/SMTP connections with user-provided app-specific passwords. This approach provides immediate functionality, maximum compatibility, and works with any standard email provider without requiring OAuth app registration.
 
 ### Direct IMAP/SMTP Authentication
 
@@ -231,7 +231,7 @@ Collected during registration/profile setup:
 
 1. Enable 2-Factor Authentication on Gmail account
 2. Generate app-specific password at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
-3. Enter app password in Handa registration form
+3. Enter app password in Quicksilver registration form
 
 ### IMAP/SMTP Configuration
 
@@ -279,7 +279,7 @@ Collected during registration/profile setup:
 
 1. Enable 2-Factor Authentication on Microsoft account
 2. Generate app password in Microsoft account security settings
-3. Enter app password in Handa registration form
+3. Enter app password in Quicksilver registration form
 
 ### IMAP/SMTP Configuration
 
@@ -343,10 +343,10 @@ User profiles stored in browser `localStorage` - no database required:
 ```javascript
 // Stored in localStorage as JSON
 {
-  // User Authentication (for Handa app)
+  // User Authentication (for Quicksilver app)
   id: String,                       // Generated UUID
   name: String,
-  email: String,                    // Handa account email
+  email: String,                    // Quicksilver account email
   
   // Email Service Configuration (collected at registration)
   emailServiceProvider: String,     // 'gmail', 'outlook', 'yahoo', 'custom'
@@ -379,8 +379,8 @@ User profiles stored in browser `localStorage` - no database required:
 }
 
 // Storage operations
-localStorage.setItem('handa_user', JSON.stringify(userProfile));
-const userProfile = JSON.parse(localStorage.getItem('handa_user'));
+localStorage.setItem('quicksilver_user', JSON.stringify(userProfile));
+const userProfile = JSON.parse(localStorage.getItem('quicksilver_user'));
 ```
 
 **Pre-configured Provider Settings:**
@@ -504,15 +504,15 @@ These are **per-user** settings collected during registration or profile setup a
 
 ### Registration Flow
 
-When users register for Handa, they provide both account credentials (for Handa itself) and email service configuration (for connecting to their email provider).
+When users register for Quicksilver, they provide both account credentials (for Quicksilver itself) and email service configuration (for connecting to their email provider).
 
 #### Registration Form Fields
 
-**Handa Account Information:**
+**Quicksilver Account Information:**
 
 - Full Name
-- Email Address (for Handa account - can be different from email service)
-- Password (for Handa login)
+- Email Address (for Quicksilver account - can be different from email service)
+- Password (for Quicksilver login)
 - Confirm Password
 
 **Email Service Configuration:**
@@ -583,7 +583,7 @@ Users can update their email service configuration after registration via the Pr
 - Update email address and password
 - Modify IMAP/SMTP settings (for custom configurations)
 - Test connection before saving changes
-- Change Handa account password
+- Change Quicksilver account password
 
 ### Milestone 1: Vercel Serverless Architecture
 

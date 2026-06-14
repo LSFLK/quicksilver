@@ -59,8 +59,8 @@ interface AuthContextValue {
   updateProfile: (data: Partial<MailProfile>) => Promise<CurrentUser>;
 }
 
-const STORAGE_PROFILE = "handa_profile";
-const STORAGE_JWT = "handa_jwt";
+const STORAGE_PROFILE = "quicksilver_profile";
+const STORAGE_JWT = "quicksilver_jwt";
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -231,7 +231,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const resetPassword = useCallback(
     async (_email: string): Promise<{ message: string }> => {
-      // Password reset is handled by the upstream mail provider, not by Handa.
+      // Password reset is handled by the upstream mail provider, not by Quicksilver.
       return {
         message:
           "Password resets are handled by your email provider (e.g., Gmail). Please reset there, then sign in again.",

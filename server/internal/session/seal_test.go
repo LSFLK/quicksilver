@@ -5,7 +5,7 @@ import (
 	"crypto/rand"
 	"testing"
 
-	"handa/server/internal/mail"
+	"quicksilver/server/internal/mail"
 )
 
 func newKey(t *testing.T) []byte {

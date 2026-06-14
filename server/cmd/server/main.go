@@ -1,4 +1,4 @@
-// Command server runs the Handa HTTP API.
+// Command server runs the Quicksilver HTTP API.
 package main
 
 import (
@@ -12,12 +12,12 @@ import (
 
 	"github.com/joho/godotenv"
 
-	"handa/server/internal/auth"
-	"handa/server/internal/config"
-	apihttp "handa/server/internal/http"
-	applog "handa/server/internal/log"
-	"handa/server/internal/session"
-	"handa/server/internal/smtp"
+	"quicksilver/server/internal/auth"
+	"quicksilver/server/internal/config"
+	apihttp "quicksilver/server/internal/http"
+	applog "quicksilver/server/internal/log"
+	"quicksilver/server/internal/session"
+	"quicksilver/server/internal/smtp"
 )
 
 // version is overridden at link time: -ldflags "-X main.version=$(git describe)"

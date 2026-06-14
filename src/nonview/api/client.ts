@@ -1,4 +1,4 @@
-// Typed fetch wrapper for the Handa backend.
+// Typed fetch wrapper for the Quicksilver backend.
 //
 // Token handling is callback-based rather than module-level so the AuthContext
 // stays the single source of truth for "am I logged in" — the client just asks.

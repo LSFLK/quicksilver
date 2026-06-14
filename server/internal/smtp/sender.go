@@ -1,5 +1,5 @@
 // Package smtp wraps github.com/wneessen/go-mail with the small surface the
-// Handa API needs.
+// Quicksilver API needs.
 package smtp
 
 import (
@@ -12,7 +12,7 @@ import (
 
 	mail "github.com/wneessen/go-mail"
 
-	hmail "handa/server/internal/mail"
+	hmail "quicksilver/server/internal/mail"
 )
 
 // Sender opens a fresh authenticated SMTP session per Send call. SMTP

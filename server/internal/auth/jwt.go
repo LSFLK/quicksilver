@@ -14,7 +14,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// Claims is the payload carried in Handa session tokens.
+// Claims is the payload carried in Quicksilver session tokens.
 type Claims struct {
 	SessionID string `json:"sid"`
 	jwt.RegisteredClaims

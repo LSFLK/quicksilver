@@ -7,12 +7,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"handa/server/internal/auth"
-	"handa/server/internal/config"
-	"handa/server/internal/http/handlers"
-	"handa/server/internal/http/middleware"
-	"handa/server/internal/session"
-	"handa/server/internal/smtp"
+	"quicksilver/server/internal/auth"
+	"quicksilver/server/internal/config"
+	"quicksilver/server/internal/http/handlers"
+	"quicksilver/server/internal/http/middleware"
+	"quicksilver/server/internal/session"
+	"quicksilver/server/internal/smtp"
 )
 
 // Deps bundles the collaborators required to build the router.

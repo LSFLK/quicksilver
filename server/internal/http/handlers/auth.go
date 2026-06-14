@@ -6,11 +6,11 @@ import (
 	"net/http"
 	"time"
 
-	"handa/server/internal/auth"
-	"handa/server/internal/http/middleware"
-	"handa/server/internal/httpx"
-	"handa/server/internal/mail"
-	"handa/server/internal/session"
+	"quicksilver/server/internal/auth"
+	"quicksilver/server/internal/http/middleware"
+	"quicksilver/server/internal/httpx"
+	"quicksilver/server/internal/mail"
+	"quicksilver/server/internal/session"
 )
 
 // Auth bundles dependencies for the /auth/* handlers.

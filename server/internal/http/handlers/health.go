@@ -1,10 +1,10 @@
-// Package handlers contains HTTP handlers for the Handa API.
+// Package handlers contains HTTP handlers for the Quicksilver API.
 package handlers
 
 import (
 	"net/http"
 
-	"handa/server/internal/httpx"
+	"quicksilver/server/internal/httpx"
 )
 
 // Health implements liveness and readiness probes.

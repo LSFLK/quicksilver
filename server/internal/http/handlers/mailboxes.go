@@ -8,9 +8,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"handa/server/internal/http/middleware"
-	"handa/server/internal/httpx"
-	"handa/server/internal/session"
+	"quicksilver/server/internal/http/middleware"
+	"quicksilver/server/internal/httpx"
+	"quicksilver/server/internal/session"
 )
 
 // Mailboxes serves mailbox listing and message-envelope endpoints.
