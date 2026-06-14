@@ -9,6 +9,14 @@ import React, {
 } from "react";
 import { useAuth } from "./AuthContext";
 import { mailboxes as mailboxesAPI, messages as messagesAPI } from "../api/endpoints";
+import {
+  readThreads,
+  writeThreads,
+  removeThread,
+  patchThread,
+  readBody,
+  writeBody,
+} from "../cache/db";
 import type {
   Address,
   Envelope,
@@ -80,6 +88,8 @@ interface DataContextValue {
   refresh: () => Promise<void>;
   getThread: (id: string) => Thread | undefined;
   getMessages: (threadId: string) => Promise<ThreadMessage[]>;
+  // Cache-first body read; returns null if nothing is cached for the thread.
+  getCachedMessages: (threadId: string) => Promise<ThreadMessage[] | null>;
   sendEmail: (data: EmailData) => Promise<{ status: string }>;
   saveDraft: (data: DraftData) => Promise<Thread>;
   deleteThread: (threadId: string) => Promise<void>;
@@ -187,7 +197,11 @@ interface DataProviderProps {
 }
 
 export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
-  const { apiClient, isAuthenticated } = useAuth();
+  const { apiClient, isAuthenticated, currentUser } = useAuth();
+
+  // Cache scope. Every IndexedDB read/write is namespaced by the signed-in
+  // address so a shared browser never mixes two accounts' mail.
+  const account = currentUser?.email || "";
 
   const [mailboxList, setMailboxList] = useState<Mailbox[]>([]);
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -201,9 +215,33 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
   // folder without a fresh mailboxes call each time.
   const rolesRef = useRef<Record<string, string>>({});
 
+  // Paint the mailbox list from IndexedDB before any network call. Returns
+  // whether the cache held anything, so the network load knows whether it
+  // still needs to show a blocking spinner (cold start) or can refresh quietly.
+  const hydrateFromCache = useCallback(async (): Promise<boolean> => {
+    if (!account) return false;
+    const [inbox, sent, draftsC, trash] = await Promise.all([
+      readThreads(account, "inbox"),
+      readThreads(account, "sent"),
+      readThreads(account, "drafts"),
+      readThreads(account, "trash"),
+    ]);
+    if (inbox.length) setThreads(inbox);
+    if (sent.length) setSentThreads(sent);
+    if (draftsC.length) setDrafts(draftsC);
+    if (trash.length) setTrashedThreads(trash);
+    return (
+      inbox.length + sent.length + draftsC.length + trash.length > 0
+    );
+  }, [account]);
+
   const loadAll = useCallback(
-    async (signal?: AbortSignal): Promise<void> => {
-      setLoading(true);
+    async (
+      signal?: AbortSignal,
+      opts: { showSpinner?: boolean } = {},
+    ): Promise<void> => {
+      // On a warm cache we refresh in the background — no blocking spinner.
+      if (opts.showSpinner !== false) setLoading(true);
       setError(null);
       try {
         const resp = await mailboxesAPI.list(apiClient, signal);
@@ -234,12 +272,25 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
             ? ((settled[idx] as PromiseFulfilledResult<{ messages: Envelope[] }>).value
                 .messages || []
               ).map((e) => envelopeToThread(e, mailbox || ""))
-            : [];
+            : null; // null = this folder's fetch failed; keep whatever's cached.
 
-        setThreads(fold(0, roles.inbox));
-        setSentThreads(fold(1, roles.sent));
-        setDrafts(fold(2, roles.drafts));
-        setTrashedThreads(fold(3, roles.trash));
+        // Apply a folder's fresh result to both React state and the cache, but
+        // only when the fetch actually succeeded — a rejected fetch must not
+        // clobber good cached rows with an empty list.
+        const apply = (
+          fresh: Thread[] | null,
+          role: string,
+          set: React.Dispatch<React.SetStateAction<Thread[]>>,
+        ) => {
+          if (fresh === null) return;
+          set(fresh);
+          void writeThreads(account, role, fresh);
+        };
+
+        apply(fold(0, roles.inbox), "inbox", setThreads);
+        apply(fold(1, roles.sent), "sent", setSentThreads);
+        apply(fold(2, roles.drafts), "drafts", setDrafts);
+        apply(fold(3, roles.trash), "trash", setTrashedThreads);
 
         const failed = settled
           .map((s, i) => ({ s, i }))
@@ -257,7 +308,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         setLoading(false);
       }
     },
-    [apiClient],
+    [apiClient, account],
   );
 
   useEffect(() => {
@@ -270,9 +321,14 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       return;
     }
     const ctrl = new AbortController();
-    void loadAll(ctrl.signal);
+    // Cache-first: paint from IndexedDB immediately, then refresh from the
+    // network without a blocking spinner if the cache already had something.
+    void (async () => {
+      const hadCache = await hydrateFromCache();
+      await loadAll(ctrl.signal, { showSpinner: !hadCache });
+    })();
     return () => ctrl.abort();
-  }, [isAuthenticated, loadAll]);
+  }, [isAuthenticated, loadAll, hydrateFromCache]);
 
   const refresh = useCallback(() => loadAll(), [loadAll]);
 
@@ -290,10 +346,24 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     async (threadId: string): Promise<ThreadMessage[]> => {
       const parsed = parseThreadID(threadId);
       if (!parsed) return [];
+      // Fetch from the network and refresh the cache.
       const msg = await messagesAPI.get(apiClient, parsed.mailbox, parsed.uid);
-      return [messageToThreadMessage(msg)];
+      const tm = messageToThreadMessage(msg);
+      void writeBody(account, threadId, tm);
+      return [tm];
     },
-    [apiClient],
+    [apiClient, account],
+  );
+
+  // Cache-first body read for the read view: returns the cached body instantly
+  // (or null on a cold thread) so ThreadPage can paint before the network
+  // round-trip completes, then revalidate via getMessages.
+  const getCachedMessages = useCallback(
+    async (threadId: string): Promise<ThreadMessage[] | null> => {
+      const cached = await readBody(account, threadId);
+      return cached ? [cached] : null;
+    },
+    [account],
   );
 
   const sendEmail = useCallback(
@@ -357,31 +427,61 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       const parsed = parseThreadID(threadId);
       if (!parsed) return;
       const trash = rolesRef.current.trash || "Trash";
-      await messagesAPI.remove(apiClient, parsed.mailbox, parsed.uid, trash);
+
+      // Optimistic: remove from the list (and cache) immediately, then call the
+      // server. Snapshot first so we can roll back if the delete fails.
+      const snapshot = { threads, sentThreads, drafts };
       const remove = (list: Thread[]) => list.filter((t) => t.id !== threadId);
       setThreads(remove);
       setSentThreads(remove);
       setDrafts(remove);
+      void removeThread(account, threadId);
+
+      try {
+        await messagesAPI.remove(apiClient, parsed.mailbox, parsed.uid, trash);
+      } catch (err) {
+        // Roll back to the pre-delete state on failure.
+        setThreads(snapshot.threads);
+        setSentThreads(snapshot.sentThreads);
+        setDrafts(snapshot.drafts);
+        void writeThreads(account, "inbox", snapshot.threads);
+        throw err;
+      }
     },
-    [apiClient],
+    [apiClient, account, threads, sentThreads, drafts],
   );
 
   const markAsRead = useCallback(
     async (threadId: string): Promise<void> => {
       const parsed = parseThreadID(threadId);
       if (!parsed) return;
-      await messagesAPI.setFlags(
-        apiClient,
-        parsed.mailbox,
-        parsed.uid,
-        ["\\Seen"],
-        true,
-      );
+
+      // Optimistic: clear the unread badge instantly in state and cache.
       setThreads((prev) =>
         prev.map((t) => (t.id === threadId ? { ...t, unreadCount: 0 } : t)),
       );
+      void patchThread(account, threadId, { unreadCount: 0 });
+
+      try {
+        await messagesAPI.setFlags(
+          apiClient,
+          parsed.mailbox,
+          parsed.uid,
+          ["\\Seen"],
+          true,
+        );
+      } catch (err) {
+        // Restore the unread badge if the flag update didn't stick.
+        setThreads((prev) =>
+          prev.map((t) =>
+            t.id === threadId ? { ...t, unreadCount: 1 } : t,
+          ),
+        );
+        void patchThread(account, threadId, { unreadCount: 1 });
+        throw err;
+      }
     },
-    [apiClient],
+    [apiClient, account],
   );
 
   const sendMessage = useCallback(
@@ -430,6 +530,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     refresh,
     getThread,
     getMessages,
+    getCachedMessages,
     sendEmail,
     saveDraft,
     deleteThread,
