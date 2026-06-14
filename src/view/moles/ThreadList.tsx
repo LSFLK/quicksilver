@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import { Box, CircularProgress } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -14,7 +14,12 @@ const ThreadList = ({
   threads,
   loading = false,
   emptyMessage = "No emails found",
-  selectedThreadId,
+  selectedThreadId = null,
+  // Infinite scroll: onLoadMore is invoked when the user nears the end of the
+  // list and hasMore is true. loadingMore shows a footer spinner.
+  onLoadMore = undefined,
+  hasMore = false,
+  loadingMore = false,
 }) => {
   const navigate = useNavigate();
   const parentRef = useRef(null);
@@ -27,6 +32,24 @@ const ThreadList = ({
     // doesn't flash blank space.
     overscan: 8,
   });
+
+  const items = rowVirtualizer.getVirtualItems();
+  const lastIndex = items.length ? items[items.length - 1].index : -1;
+
+  // When the last row scrolls into view (overscan included), pull the next
+  // page. Depending on the primitive lastIndex keeps this from firing on every
+  // virtualizer recalculation.
+  useEffect(() => {
+    if (lastIndex < 0) return;
+    if (
+      lastIndex >= (threads?.length || 0) - 1 &&
+      hasMore &&
+      !loadingMore &&
+      onLoadMore
+    ) {
+      onLoadMore();
+    }
+  }, [lastIndex, threads?.length, hasMore, loadingMore, onLoadMore]);
 
   if (loading) {
     return (
@@ -53,8 +76,6 @@ const ThreadList = ({
     // single path segment; useParams() decodes it back automatically.
     navigate(`/thread/${encodeURIComponent(threadId)}`);
   };
-
-  const items = rowVirtualizer.getVirtualItems();
 
   return (
     // The scroll container. Only the rows inside the viewport are mounted, so
@@ -98,6 +119,21 @@ const ThreadList = ({
           );
         })}
       </Box>
+
+      {/* Footer spinner shown while the next page is loading. Sits below the
+          virtualized sizer (which already reserves the full list height). */}
+      {loadingMore && (
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            p: 2,
+          }}
+        >
+          <CircularProgress size={24} />
+        </Box>
+      )}
     </Box>
   );
 };

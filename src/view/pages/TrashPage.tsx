@@ -5,7 +5,7 @@ import ThreadList from "../moles/ThreadList";
 import { useData } from "../../nonview/core/DataContext";
 
 function TrashPage() {
-  const { trashedThreads, loading } = useData();
+  const { trashedThreads, loading, hasMore, loadingMore, loadMore } = useData();
   const [searchQuery, setSearchQuery] = useState("");
 
   const filteredThreads = trashedThreads.filter((thread) => {
@@ -31,6 +31,9 @@ function TrashPage() {
         emptyMessage={
           searchQuery ? "No trash items match your search" : "Trash is empty"
         }
+        onLoadMore={() => loadMore("trash")}
+        hasMore={!searchQuery && hasMore.trash}
+        loadingMore={loadingMore.trash}
       />
     </AppLayout>
   );

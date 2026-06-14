@@ -5,7 +5,7 @@ import ThreadList from "../moles/ThreadList";
 import { useData } from "../../nonview/core/DataContext";
 
 function SentPage() {
-  const { sentThreads, loading } = useData();
+  const { sentThreads, loading, hasMore, loadingMore, loadMore } = useData();
   const [searchQuery, setSearchQuery] = useState("");
 
   const filteredThreads = sentThreads.filter((thread) => {
@@ -31,6 +31,9 @@ function SentPage() {
         emptyMessage={
           searchQuery ? "No sent emails match your search" : "No sent emails"
         }
+        onLoadMore={() => loadMore("sent")}
+        hasMore={!searchQuery && hasMore.sent}
+        loadingMore={loadingMore.sent}
       />
     </AppLayout>
   );

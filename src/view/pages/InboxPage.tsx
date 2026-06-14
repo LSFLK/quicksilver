@@ -8,7 +8,7 @@ import FloatingActionButton from "../atoms/FloatingActionButton";
 import { useData } from "../../nonview/core/DataContext";
 
 function InboxPage() {
-  const { threads, loading } = useData();
+  const { threads, loading, hasMore, loadingMore, loadMore } = useData();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -35,6 +35,9 @@ function InboxPage() {
         emptyMessage={
           searchQuery ? "No emails match your search" : "Your inbox is empty"
         }
+        onLoadMore={() => loadMore("inbox")}
+        hasMore={!searchQuery && hasMore.inbox}
+        loadingMore={loadingMore.inbox}
       />
       <FloatingActionButton
         icon={EditIcon}

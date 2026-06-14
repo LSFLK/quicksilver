@@ -22,6 +22,7 @@ import type {
   Envelope,
   Mailbox,
   Message,
+  MessageListResponse,
 } from "../api/types";
 
 // Thread is the shape consumed by existing UI components. Each backend
@@ -85,6 +86,12 @@ interface DataContextValue {
   loading: boolean;
   error: string | null;
   unreadCount: number;
+  // Pagination state keyed by role ("inbox" | "sent" | "drafts" | "trash").
+  // hasMore[role] is false once the server has no older messages to give.
+  hasMore: Record<string, boolean>;
+  loadingMore: Record<string, boolean>;
+  // Fetch the next page of older messages for a folder and append them.
+  loadMore: (role: string) => Promise<void>;
   refresh: () => Promise<void>;
   getThread: (id: string) => Thread | undefined;
   getMessages: (threadId: string) => Promise<ThreadMessage[]>;
@@ -114,6 +121,21 @@ const ROLE_NAMES: Record<string, string[]> = {
   drafts: ["Drafts", "[Gmail]/Drafts"],
   trash: ["Trash", "Deleted Items", "[Gmail]/Trash"],
 };
+
+// How many envelopes to request per page. A full page implies more may exist;
+// a short page means we've reached the end of the mailbox.
+const PAGE_SIZE = 50;
+
+// Smallest UID among loaded threads — the fallback "before" cursor when the
+// server-supplied next_before isn't available yet (e.g. straight after a
+// cache hydrate, before the first network refresh sets it).
+function minUID(list: Thread[]): number | undefined {
+  let min: number | undefined;
+  for (const t of list) {
+    if (t.uid > 0 && (min === undefined || t.uid < min)) min = t.uid;
+  }
+  return min;
+}
 
 // Resolves the actual mailbox names served by the user's provider against
 // well-known role hints (set by the IMAP \\Special-Use flags or, failing that,
@@ -211,6 +233,13 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Pagination bookkeeping per folder role. `cursors` holds the next `before`
+  // UID to request; `hasMore` whether the server still has older messages;
+  // `loadingMore` guards against overlapping page fetches.
+  const [cursors, setCursors] = useState<Record<string, number | undefined>>({});
+  const [hasMore, setHasMore] = useState<Record<string, boolean>>({});
+  const [loadingMore, setLoadingMore] = useState<Record<string, boolean>>({});
+
   // Cache of role → mailbox name resolution so handlers can post to the right
   // folder without a fresh mailboxes call each time.
   const rolesRef = useRef<Record<string, string>>({});
@@ -254,43 +283,42 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         // the successful folders' data.
         const settled = await Promise.allSettled([
           roles.inbox
-            ? mailboxesAPI.listMessages(apiClient, roles.inbox, { limit: 50 }, signal)
+            ? mailboxesAPI.listMessages(apiClient, roles.inbox, { limit: PAGE_SIZE }, signal)
             : Promise.resolve({ messages: [] }),
           roles.sent
-            ? mailboxesAPI.listMessages(apiClient, roles.sent, { limit: 50 }, signal)
+            ? mailboxesAPI.listMessages(apiClient, roles.sent, { limit: PAGE_SIZE }, signal)
             : Promise.resolve({ messages: [] }),
           roles.drafts
-            ? mailboxesAPI.listMessages(apiClient, roles.drafts, { limit: 50 }, signal)
+            ? mailboxesAPI.listMessages(apiClient, roles.drafts, { limit: PAGE_SIZE }, signal)
             : Promise.resolve({ messages: [] }),
           roles.trash
-            ? mailboxesAPI.listMessages(apiClient, roles.trash, { limit: 50 }, signal)
+            ? mailboxesAPI.listMessages(apiClient, roles.trash, { limit: PAGE_SIZE }, signal)
             : Promise.resolve({ messages: [] }),
         ]);
 
-        const fold = (idx: number, mailbox: string | undefined) =>
-          settled[idx].status === "fulfilled"
-            ? ((settled[idx] as PromiseFulfilledResult<{ messages: Envelope[] }>).value
-                .messages || []
-              ).map((e) => envelopeToThread(e, mailbox || ""))
-            : null; // null = this folder's fetch failed; keep whatever's cached.
-
-        // Apply a folder's fresh result to both React state and the cache, but
-        // only when the fetch actually succeeded — a rejected fetch must not
-        // clobber good cached rows with an empty list.
+        // Apply a folder's fresh first page to React state and the cache, and
+        // record its pagination cursor — but only when the fetch succeeded, so
+        // a rejected fetch never clobbers good cached rows with an empty list.
         const apply = (
-          fresh: Thread[] | null,
+          idx: number,
           role: string,
+          mailbox: string | undefined,
           set: React.Dispatch<React.SetStateAction<Thread[]>>,
         ) => {
-          if (fresh === null) return;
+          if (settled[idx].status !== "fulfilled") return; // keep cached rows
+          const val = (settled[idx] as PromiseFulfilledResult<MessageListResponse>).value;
+          const msgs = val.messages || [];
+          const fresh = msgs.map((e) => envelopeToThread(e, mailbox || ""));
           set(fresh);
           void writeThreads(account, role, fresh);
+          setCursors((c) => ({ ...c, [role]: val.next_before }));
+          setHasMore((h) => ({ ...h, [role]: msgs.length >= PAGE_SIZE }));
         };
 
-        apply(fold(0, roles.inbox), "inbox", setThreads);
-        apply(fold(1, roles.sent), "sent", setSentThreads);
-        apply(fold(2, roles.drafts), "drafts", setDrafts);
-        apply(fold(3, roles.trash), "trash", setTrashedThreads);
+        apply(0, "inbox", roles.inbox, setThreads);
+        apply(1, "sent", roles.sent, setSentThreads);
+        apply(2, "drafts", roles.drafts, setDrafts);
+        apply(3, "trash", roles.trash, setTrashedThreads);
 
         const failed = settled
           .map((s, i) => ({ s, i }))
@@ -331,6 +359,66 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
   }, [isAuthenticated, loadAll, hydrateFromCache]);
 
   const refresh = useCallback(() => loadAll(), [loadAll]);
+
+  const loadMore = useCallback(
+    async (role: string): Promise<void> => {
+      const mailbox = rolesRef.current[role];
+      if (!mailbox) return;
+      if (loadingMore[role]) return; // a page fetch is already in flight
+      if (hasMore[role] === false) return; // reached the end
+
+      // Pick the right folder's array + setter.
+      const map: Record<
+        string,
+        [Thread[], React.Dispatch<React.SetStateAction<Thread[]>>]
+      > = {
+        inbox: [threads, setThreads],
+        sent: [sentThreads, setSentThreads],
+        trash: [trashedThreads, setTrashedThreads],
+        drafts: [drafts, setDrafts],
+      };
+      const entry = map[role];
+      if (!entry) return;
+      const [current, set] = entry;
+
+      const before = cursors[role] ?? minUID(current);
+      if (!before) return; // nothing to page from
+
+      setLoadingMore((m) => ({ ...m, [role]: true }));
+      try {
+        const resp = await mailboxesAPI.listMessages(apiClient, mailbox, {
+          limit: PAGE_SIZE,
+          before,
+        });
+        const msgs = resp.messages || [];
+        const fresh = msgs.map((e) => envelopeToThread(e, mailbox));
+        // Append, de-duping by id in case a message shifted pages between calls.
+        const seen = new Set(current.map((t) => t.id));
+        const merged = [...current, ...fresh.filter((t) => !seen.has(t.id))];
+        set(merged);
+        void writeThreads(account, role, merged);
+        setCursors((c) => ({ ...c, [role]: resp.next_before }));
+        setHasMore((h) => ({ ...h, [role]: msgs.length >= PAGE_SIZE }));
+      } catch (err) {
+        if ((err as { name?: string })?.name !== "AbortError") {
+          setError((err as Error).message || "Failed to load more mail");
+        }
+      } finally {
+        setLoadingMore((m) => ({ ...m, [role]: false }));
+      }
+    },
+    [
+      apiClient,
+      account,
+      threads,
+      sentThreads,
+      trashedThreads,
+      drafts,
+      cursors,
+      hasMore,
+      loadingMore,
+    ],
+  );
 
   const allThreads = useMemo(
     () => [...threads, ...sentThreads, ...drafts, ...trashedThreads],
@@ -527,6 +615,9 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     loading,
     error,
     unreadCount,
+    hasMore,
+    loadingMore,
+    loadMore,
     refresh,
     getThread,
     getMessages,
