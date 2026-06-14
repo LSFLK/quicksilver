@@ -2,19 +2,53 @@ name: Build and deploy
 
 on:
   push:
+  pull_request:
 
 jobs:
-  build:
-    name: Build
+  server:
+    name: Server (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+          cache-dependency-path: server/go.sum
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: gofmt check
+        run: |
+          fmt_out=$(gofmt -l .)
+          if [ -n "$fmt_out" ]; then
+            echo "::error::gofmt would reformat:"
+            echo "$fmt_out"
+            exit 1
+          fi
+
+      - name: Tests (with race detector)
+        run: go test -race -count=1 ./...
+
+      - name: Build
+        run: go build ./...
+
+  frontend:
+    name: Frontend (Vite)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v1
+      - uses: actions/setup-node@v4
         with:
-          node-version: 19.x
+          node-version: 20.x
+          cache: npm
 
-      - run: npm install
+      - run: npm ci
       - run: npm run build
 
       - uses: actions/upload-artifact@v4
@@ -23,10 +57,10 @@ jobs:
           path: ./build
 
   deploy:
-    name: Deploy
-    needs: build
+    name: Deploy to GitHub Pages
+    needs: [server, frontend]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     steps:
       - uses: actions/download-artifact@v4
         with:
