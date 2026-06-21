@@ -1,5 +1,5 @@
 import React from "react";
-import { Fab } from "@mui/material";
+import { Fab, FabProps } from "@mui/material";
 
 const FloatingActionButton = ({
   icon: Icon,
@@ -18,7 +18,7 @@ const FloatingActionButton = ({
 
   return (
     <Fab
-      color={color}
+      color={color as FabProps["color"]}
       aria-label={ariaLabel}
       onClick={onClick}
       sx={{

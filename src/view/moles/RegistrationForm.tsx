@@ -71,12 +71,12 @@ const RegistrationForm = ({ onSubmit, loading = false }) => {
     smtpPort: EMAIL_PROVIDERS.gmail.smtpPort,
     smtpSecure: EMAIL_PROVIDERS.gmail.smtpSecure,
   });
-  const [errors, setErrors] = useState({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState("");
 
   const handleChange = (field) => (e) => {
     const value = e.target.value;
-    let updates = { [field]: value };
+    let updates: Record<string, any> = { [field]: value };
 
     // Auto-populate server settings when provider changes
     if (field === "emailServiceProvider" && EMAIL_PROVIDERS[value]) {
@@ -100,7 +100,7 @@ const RegistrationForm = ({ onSubmit, loading = false }) => {
   };
 
   const validateForm = () => {
-    const newErrors = {};
+    const newErrors: Record<string, string> = {};
 
     if (!formData.name.trim()) {
       newErrors.name = "Name is required";
@@ -165,10 +165,10 @@ const RegistrationForm = ({ onSubmit, loading = false }) => {
         emailAddress: formData.emailAddress,
         emailPassword: formData.emailPassword,
         imapHost: formData.imapHost,
-        imapPort: parseInt(formData.imapPort),
+        imapPort: parseInt(String(formData.imapPort), 10),
         imapSecure: formData.imapSecure,
         smtpHost: formData.smtpHost,
-        smtpPort: parseInt(formData.smtpPort),
+        smtpPort: parseInt(String(formData.smtpPort), 10),
         smtpSecure: formData.smtpSecure,
       });
     } catch (error) {

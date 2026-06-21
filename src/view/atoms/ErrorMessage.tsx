@@ -1,12 +1,17 @@
 import React from "react";
-import { Alert, IconButton } from "@mui/material";
+import { Alert, AlertColor, IconButton } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 
-const ErrorMessage = ({ message, onDismiss, severity = "error", variant }) => {
+const ErrorMessage = ({
+  message,
+  onDismiss,
+  severity = "error",
+  variant = null,
+}) => {
   if (!message) return null;
 
   // Support variant prop for backward compatibility
-  const alertSeverity = variant === "success" ? "success" : severity;
+  const alertSeverity = (variant === "success" ? "success" : severity) as AlertColor;
 
   return (
     <Alert

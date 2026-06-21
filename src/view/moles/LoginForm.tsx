@@ -13,11 +13,11 @@ const LoginForm = ({ onSubmit, loading = false }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
-  const [errors, setErrors] = useState({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState("");
 
   const validateForm = () => {
-    const newErrors = {};
+    const newErrors: Record<string, string> = {};
 
     if (!email) {
       newErrors.email = "Email is required";

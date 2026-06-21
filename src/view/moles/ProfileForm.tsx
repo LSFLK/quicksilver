@@ -80,7 +80,7 @@ function ProfileForm({ user, onSubmit }) {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    let updates = { [name]: value };
+    let updates: Record<string, any> = { [name]: value };
 
     // Auto-populate server settings when provider changes
     if (name === "emailServiceProvider" && EMAIL_PROVIDERS[value]) {
@@ -143,7 +143,7 @@ function ProfileForm({ user, onSubmit }) {
     setLoading(true);
     try {
       // Prepare update data
-      const updateData = {
+      const updateData: Record<string, any> = {
         name: formData.name,
         email: formData.email,
         // Email service configuration
@@ -151,10 +151,10 @@ function ProfileForm({ user, onSubmit }) {
         emailAddress: formData.emailAddress,
         emailPassword: formData.emailPassword,
         imapHost: formData.imapHost,
-        imapPort: parseInt(formData.imapPort),
+        imapPort: parseInt(String(formData.imapPort), 10),
         imapSecure: formData.imapSecure,
         smtpHost: formData.smtpHost,
-        smtpPort: parseInt(formData.smtpPort),
+        smtpPort: parseInt(String(formData.smtpPort), 10),
         smtpSecure: formData.smtpSecure,
       };
 

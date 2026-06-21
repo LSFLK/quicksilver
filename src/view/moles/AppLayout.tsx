@@ -6,10 +6,10 @@ import MobileNavBar from "./MobileNavBar";
 
 const AppLayout = ({
   children,
-  title,
-  titleIcon,
+  title = "",
+  titleIcon = null,
   showSearch = false,
-  onSearch,
+  onSearch = null,
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));

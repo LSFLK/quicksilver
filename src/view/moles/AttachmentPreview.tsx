@@ -5,7 +5,7 @@ import DownloadIcon from "@mui/icons-material/Download";
 import CloseIcon from "@mui/icons-material/Close";
 import AttachmentInfo from "../atoms/AttachmentInfo";
 
-const AttachmentPreview = ({ attachment, onRemove, onDownload }) => {
+const AttachmentPreview = ({ attachment, onRemove = null, onDownload = null }) => {
   return (
     <Box
       sx={{

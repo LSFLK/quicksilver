@@ -2,7 +2,12 @@ import React from "react";
 import { Box, Typography } from "@mui/material";
 import InboxIcon from "@mui/icons-material/Inbox";
 
-const EmptyState = ({ icon: CustomIcon, title, description, action }) => {
+const EmptyState = ({
+  icon: CustomIcon = null,
+  title,
+  description = null,
+  action = null,
+}) => {
   const Icon = CustomIcon || InboxIcon;
 
   return (

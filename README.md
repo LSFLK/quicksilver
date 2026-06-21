@@ -45,14 +45,14 @@ See [`server/README.md`](server/README.md) for the backend in detail.
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) 18+ (LTS recommended) + npm 9+
+- [Node.js](https://nodejs.org/) 20+ (LTS recommended) + [pnpm](https://pnpm.io/) 10+ (`corepack enable pnpm`)
 - [Go](https://go.dev/) 1.23+ (only needed if you're running the backend locally)
 
 ### One-time setup
 
 ```bash
 # Frontend deps
-npm install
+pnpm install
 
 # Backend deps + secrets
 cd server
@@ -77,7 +77,7 @@ Open two terminals:
 cd server && make run
 
 # Terminal 2 — frontend on :3000, proxies /api → :8080
-npm run dev
+pnpm run dev
 ```
 
 Then open **http://localhost:3000/quicksilver/** in your browser.
@@ -86,11 +86,11 @@ Then open **http://localhost:3000/quicksilver/** in your browser.
 
 | Command             | Stack    | Description                                                |
 | ------------------- | -------- | ---------------------------------------------------------- |
-| `npm run dev`       | frontend | Vite dev server (http://localhost:3000/quicksilver/, HMR)        |
-| `npm start`         | frontend | Alias for `npm run dev`                                    |
-| `npm run build`     | frontend | Production bundle → `build/`                               |
-| `npm run preview`   | frontend | Preview the production build locally                       |
-| `npm run typecheck` | frontend | `tsc --noEmit` (does not block `build`)                    |
+| `pnpm run dev`       | frontend | Vite dev server (http://localhost:3000/quicksilver/, HMR)        |
+| `pnpm start`         | frontend | Alias for `pnpm run dev`                                    |
+| `pnpm run build`     | frontend | Production bundle → `build/`                               |
+| `pnpm run preview`   | frontend | Preview the production build locally                       |
+| `pnpm run typecheck` | frontend | `tsc --noEmit` (does not block `build`)                    |
 | `make run`          | backend  | `go run ./cmd/server` (run from `server/`)                 |
 | `make build`        | backend  | Build → `server/bin/quicksilver-server`                          |
 | `make test`         | backend  | `go test ./...`                                            |
