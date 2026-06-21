@@ -158,16 +158,17 @@ func (s *Store) Get(id string) (*Session, bool) {
 }
 
 // IMAPFor returns the live IMAP client for the session, transparently
-// reconnecting from sealed credentials if the previous connection was dropped.
+// reconnecting from sealed credentials if there is no connection yet.
+//
+// We deliberately do NOT probe the existing connection with a NOOP here: every
+// Client operation already calls ensureLive, which NOOPs and self-heals from the
+// stored credentials on failure. Probing here too would add a full extra
+// round-trip to the IMAP server (~one RTT) on every request for no benefit.
 func (s *Store) IMAPFor(ctx context.Context, sess *Session) (*imap.Client, error) {
 	sess.mu.Lock()
 	defer sess.mu.Unlock()
 	if sess.imap != nil {
-		if err := sess.imap.Ping(ctx); err == nil {
-			return sess.imap, nil
-		}
-		_ = sess.imap.Close()
-		sess.imap = nil
+		return sess.imap, nil
 	}
 	creds, err := s.sealer.Open(sess.sealed)
 	if err != nil {

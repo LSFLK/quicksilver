@@ -48,6 +48,36 @@ type Envelope struct {
 	Preview        string    `json:"preview,omitempty"`
 }
 
+// FlagUpdate carries the current IMAP flags for a single known message. The
+// delta endpoint returns one per message the client already knows about and is
+// still present upstream; the client diffs these against its cached flags to
+// detect read/unread (and other flag) transitions.
+type FlagUpdate struct {
+	UID   uint32   `json:"uid"`
+	Flags []string `json:"flags"`
+}
+
+// MailboxDelta is the incremental-sync payload for one mailbox (proposal §6).
+//
+// Because go-imap v1 exposes no CONDSTORE/MODSEQ, the delta is computed from
+// UIDs and flags rather than a MODSEQ token: the client sends the UIDs it
+// already has, and the server returns only what changed —
+//   - Added:   full envelopes for UIDs newer than the client's highest known UID.
+//   - Flags:   current flags for known UIDs still present (client diffs locally).
+//   - Removed: known UIDs that have since been expunged/moved away.
+//
+// UIDVALIDITY is the cache-coherence guard: if it differs from the client's
+// stored value the cached UIDs are meaningless, so Resync is set and the client
+// must discard its cache and refetch the folder from scratch.
+type MailboxDelta struct {
+	UIDValidity uint32       `json:"uidvalidity"`
+	Total       uint32       `json:"total"`
+	Resync      bool         `json:"resync"`
+	Added       []Envelope   `json:"added"`
+	Flags       []FlagUpdate `json:"flags"`
+	Removed     []uint32     `json:"removed"`
+}
+
 // AttachmentMeta describes an attachment without including its bytes.
 type AttachmentMeta struct {
 	ID       string `json:"id"`

@@ -63,6 +63,7 @@ func NewRouter(d Deps) http.Handler {
 			r.Use(requireSession)
 			r.Get("/mailboxes", mboxH.List)
 			r.Get("/mailboxes/{mailbox}/messages", mboxH.ListMessages)
+			r.Get("/mailboxes/{mailbox}/changes", mboxH.Changes)
 			r.Get("/mailboxes/{mailbox}/messages/{uid}", msgH.Get)
 			r.Patch("/mailboxes/{mailbox}/messages/{uid}/flags", msgH.SetFlags)
 			r.Delete("/mailboxes/{mailbox}/messages/{uid}", msgH.Delete)

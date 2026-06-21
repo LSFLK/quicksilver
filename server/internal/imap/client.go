@@ -176,26 +176,26 @@ func (c *Client) selectMailbox(name string, readOnly bool) error {
 // ListMessages returns up to limit envelopes from the given mailbox, newest first.
 // If before > 0, only messages with UID < before are returned (cursor-style paging).
 // The returned total is the mailbox's full message count (independent of the
-// page), suitable for a "1–50 of N" pager.
-func (c *Client) ListMessages(ctx context.Context, mailbox string, limit int, before uint32) ([]hmail.Envelope, uint32, error) {
+// page), suitable for a "1–50 of N" pager. uidvalidity is the mailbox's current
+// UIDVALIDITY, which the client persists to detect cache-invalidating changes
+// on a later delta sync.
+func (c *Client) ListMessages(ctx context.Context, mailbox string, limit int, before uint32) (envs []hmail.Envelope, total, uidvalidity uint32, err error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if err := c.ensureLive(ctx); err != nil {
-		return nil, 0, err
-	}
-	if err := c.selectMailbox(mailbox, true); err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 	mbox, err := c.conn.Select(mailbox, true)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, fmt.Errorf("select %q: %w", mailbox, err)
 	}
-	total := mbox.Messages
+	c.selected = mailbox
+	total, uidvalidity = mbox.Messages, mbox.UidValidity
 	if total == 0 {
-		return []hmail.Envelope{}, 0, nil
+		return []hmail.Envelope{}, 0, uidvalidity, nil
 	}
 
 	// Fetch the highest UID first; if before is set, cap the upper bound there.
@@ -207,35 +207,150 @@ func (c *Client) ListMessages(ctx context.Context, mailbox string, limit int, be
 	}
 	uids, err := c.conn.UidSearch(criteria)
 	if err != nil {
-		return nil, 0, fmt.Errorf("uid search: %w", err)
+		return nil, 0, 0, fmt.Errorf("uid search: %w", err)
 	}
 	if len(uids) == 0 {
-		return []hmail.Envelope{}, total, nil
+		return []hmail.Envelope{}, total, uidvalidity, nil
 	}
 	// Newest first; take the last `limit` UIDs.
 	if len(uids) > limit {
 		uids = uids[len(uids)-limit:]
 	}
+	envelopes, err := c.fetchEnvelopes(uids)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	reverseEnvelopes(envelopes) // UID-ascending fetch → newest-first
+	return envelopes, total, uidvalidity, nil
+}
+
+// MailboxChanges computes an incremental-sync delta for a mailbox given the
+// client's last-known state (proposal §6). knownValidity is the UIDVALIDITY the
+// client cached for this folder (0 if none); known is the set of UIDs it
+// currently holds. See hmail.MailboxDelta for the contract.
+//
+// Caller does not need the mailbox SELECTed beforehand.
+func (c *Client) MailboxChanges(ctx context.Context, mailbox string, knownValidity uint32, known []uint32, limit int) (hmail.MailboxDelta, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	var delta hmail.MailboxDelta
+	if err := c.ensureLive(ctx); err != nil {
+		return delta, err
+	}
+	mbox, err := c.conn.Select(mailbox, true)
+	if err != nil {
+		return delta, fmt.Errorf("select %q: %w", mailbox, err)
+	}
+	c.selected = mailbox
+	delta.UIDValidity, delta.Total = mbox.UidValidity, mbox.Messages
+
+	// UIDVALIDITY changed → the client's cached UIDs no longer identify the same
+	// messages. Signal a full resync and skip the (now meaningless) diff.
+	if knownValidity != 0 && knownValidity != mbox.UidValidity {
+		delta.Resync = true
+		return delta, nil
+	}
+
+	// Watermark: IMAP UIDs increase monotonically, so anything strictly greater
+	// than the highest UID the client holds is genuinely new.
+	var sinceUID uint32
+	for _, u := range known {
+		if u > sinceUID {
+			sinceUID = u
+		}
+	}
+
+	// 1. Added — UIDs in (sinceUID+1):*, capped to the newest `limit`.
+	if mbox.Messages > 0 && sinceUID < ^uint32(0) {
+		crit := imap.NewSearchCriteria()
+		seq := new(imap.SeqSet)
+		seq.AddRange(sinceUID+1, 0) // "(sinceUID+1):*" — 0 means "*"
+		crit.Uid = seq
+		newUIDs, err := c.conn.UidSearch(crit)
+		if err != nil {
+			return delta, fmt.Errorf("uid search added: %w", err)
+		}
+		if len(newUIDs) > limit {
+			newUIDs = newUIDs[len(newUIDs)-limit:]
+		}
+		if len(newUIDs) > 0 {
+			added, err := c.fetchEnvelopes(newUIDs)
+			if err != nil {
+				return delta, err
+			}
+			reverseEnvelopes(added) // newest-first, matching ListMessages
+			delta.Added = added
+		}
+	}
+
+	// 2. Flags + removals among the known set. A known UID absent from the
+	// FLAGS fetch has been expunged or moved away.
+	if len(known) > 0 {
+		present, err := c.fetchFlags(known)
+		if err != nil {
+			return delta, err
+		}
+		for _, u := range known {
+			if fl, ok := present[u]; ok {
+				delta.Flags = append(delta.Flags, hmail.FlagUpdate{UID: u, Flags: fl})
+			} else {
+				delta.Removed = append(delta.Removed, u)
+			}
+		}
+	}
+	return delta, nil
+}
+
+// fetchEnvelopes fetches list-view envelopes for the given UIDs in UID-ascending
+// order. Caller must hold c.mu and have the mailbox SELECTed.
+func (c *Client) fetchEnvelopes(uids []uint32) ([]hmail.Envelope, error) {
 	seq := new(imap.SeqSet)
 	seq.AddNum(uids...)
-
 	msgs := make(chan *imap.Message, len(uids))
-	fetchDone := make(chan error, 1)
+	done := make(chan error, 1)
 	items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchFlags, imap.FetchUid, imap.FetchBodyStructure}
-	go func() { fetchDone <- c.conn.UidFetch(seq, items, msgs) }()
+	go func() { done <- c.conn.UidFetch(seq, items, msgs) }()
 
-	var envelopes []hmail.Envelope
+	var out []hmail.Envelope
 	for m := range msgs {
-		envelopes = append(envelopes, envelopeFrom(m))
+		out = append(out, envelopeFrom(m))
 	}
-	if err := <-fetchDone; err != nil {
-		return nil, 0, fmt.Errorf("fetch envelopes: %w", err)
+	if err := <-done; err != nil {
+		return nil, fmt.Errorf("fetch envelopes: %w", err)
 	}
-	// Sort newest-first by UID descending.
-	for i, j := 0, len(envelopes)-1; i < j; i, j = i+1, j-1 {
-		envelopes[i], envelopes[j] = envelopes[j], envelopes[i]
+	return out, nil
+}
+
+// fetchFlags fetches only the flags for the given UIDs, returned as a uid→flags
+// map. UIDs that no longer exist are simply omitted from the result. Caller must
+// hold c.mu and have the mailbox SELECTed.
+func (c *Client) fetchFlags(uids []uint32) (map[uint32][]string, error) {
+	seq := new(imap.SeqSet)
+	seq.AddNum(uids...)
+	msgs := make(chan *imap.Message, len(uids))
+	done := make(chan error, 1)
+	items := []imap.FetchItem{imap.FetchFlags, imap.FetchUid}
+	go func() { done <- c.conn.UidFetch(seq, items, msgs) }()
+
+	out := make(map[uint32][]string, len(uids))
+	for m := range msgs {
+		out[m.Uid] = append([]string(nil), m.Flags...)
 	}
-	return envelopes, total, nil
+	if err := <-done; err != nil {
+		return nil, fmt.Errorf("fetch flags: %w", err)
+	}
+	return out, nil
+}
+
+// reverseEnvelopes flips a UID-ascending slice in place to newest-first.
+func reverseEnvelopes(e []hmail.Envelope) {
+	for i, j := 0, len(e)-1; i < j; i, j = i+1, j-1 {
+		e[i], e[j] = e[j], e[i]
+	}
 }
 
 func envelopeFrom(m *imap.Message) hmail.Envelope {

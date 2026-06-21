@@ -79,6 +79,29 @@ export interface MessageListResponse {
   next_before?: number;
   // Total messages in the mailbox (independent of the page), for "1–50 of N".
   total?: number;
+  // The mailbox's UIDVALIDITY, persisted so a later delta sync can detect a
+  // cache-invalidating change upstream.
+  uidvalidity?: number;
+}
+
+// FlagUpdate is the current flag set for one known message (see MailboxDelta).
+export interface FlagUpdate {
+  uid: number;
+  flags: string[];
+}
+
+// MailboxDelta is the incremental-sync payload from GET .../changes. Mirrors
+// server/internal/mail/types.go MailboxDelta. `added` are full envelopes for
+// genuinely-new messages; `flags` are current flags for known messages still
+// present (the client diffs them); `removed` are known UIDs now gone. When
+// `resync` is true the client must discard its cache and refetch the folder.
+export interface MailboxDelta {
+  uidvalidity: number;
+  total: number;
+  resync: boolean;
+  added: Envelope[] | null;
+  flags: FlagUpdate[] | null;
+  removed: number[] | null;
 }
 
 export interface APIErrorBody {
