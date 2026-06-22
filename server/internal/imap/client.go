@@ -34,7 +34,12 @@ type Client struct {
 	timeout  time.Duration
 	logger   *slog.Logger
 	conn     *client.Client
-	selected string // currently SELECTed mailbox (case-sensitive on the wire)
+	lastOK   time.Time // when the connection was last known good (see ensureLive)
+	selected string    // currently SELECTed mailbox (case-sensitive on the wire)
+	// selectedRO records whether the current SELECT is read-only. A write
+	// operation (STORE/MOVE) after a read-only SELECT of the same mailbox must
+	// re-SELECT read-write, or the server rejects it ("STORE on READ-ONLY").
+	selectedRO bool
 }
 
 // New dials the IMAP server and authenticates. The returned client owns the
@@ -79,16 +84,53 @@ func (c *Client) connect(ctx context.Context) error {
 // ensureLive returns the current connection, reconnecting on noop failure.
 //
 // Caller must hold c.mu.
+// connFreshFor is how long after a known-good use we trust the connection
+// without re-probing it. A NOOP is a full round-trip to the server; skipping it
+// on back-to-back operations (e.g. a realtime delta sync) noticeably cuts
+// latency against high-RTT providers like Gmail. This is kept longer than the
+// session keepalive interval (which NOOPs every live connection on each sweep)
+// so a warm connection's NOOP/reconnect cost is paid by the background sweep,
+// never on the user-facing sync path. A connection that dies inside the window
+// surfaces as an error on the next command, which then heals.
+const connFreshFor = 90 * time.Second
+
+// Keepalive issues a NOOP to keep the connection warm and refresh its
+// liveness timestamp. Unlike ensureLive it does not reconnect on failure — it
+// just drops the dead connection so the next real operation re-establishes it.
+// Intended to be called periodically by the session sweeper.
+func (c *Client) Keepalive(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.conn == nil {
+		return nil // nothing to keep warm; created lazily on next use
+	}
+	if err := c.conn.Noop(); err != nil {
+		_ = c.conn.Logout()
+		c.conn = nil
+		return err
+	}
+	c.lastOK = time.Now()
+	return nil
+}
+
 func (c *Client) ensureLive(ctx context.Context) error {
 	if c.conn != nil {
+		if time.Since(c.lastOK) < connFreshFor {
+			return nil
+		}
 		if err := c.conn.Noop(); err == nil {
+			c.lastOK = time.Now()
 			return nil
 		}
 		// Connection looks dead — close and fall through to reconnect.
 		_ = c.conn.Logout()
 		c.conn = nil
 	}
-	return c.connect(ctx)
+	if err := c.connect(ctx); err != nil {
+		return err
+	}
+	c.lastOK = time.Now()
+	return nil
 }
 
 // Close logs out and closes the underlying connection. Safe to call once.
@@ -161,7 +203,10 @@ func mailboxFromInfo(info *imap.MailboxInfo) hmail.Mailbox {
 }
 
 func (c *Client) selectMailbox(name string, readOnly bool) error {
-	if c.selected == name {
+	// Reuse the existing SELECT only if it also satisfies the required access
+	// mode. A read-write SELECT can serve a read-only request, but a read-only
+	// SELECT cannot serve a read-write one (the server rejects STORE/MOVE).
+	if c.selected == name && (readOnly || !c.selectedRO) {
 		return nil
 	}
 	_, err := c.conn.Select(name, readOnly)
@@ -170,6 +215,7 @@ func (c *Client) selectMailbox(name string, readOnly bool) error {
 		return fmt.Errorf("select %q: %w", name, err)
 	}
 	c.selected = name
+	c.selectedRO = readOnly
 	return nil
 }
 
@@ -192,7 +238,7 @@ func (c *Client) ListMessages(ctx context.Context, mailbox string, limit int, be
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("select %q: %w", mailbox, err)
 	}
-	c.selected = mailbox
+	c.selected, c.selectedRO = mailbox, true
 	total, uidvalidity = mbox.Messages, mbox.UidValidity
 	if total == 0 {
 		return []hmail.Envelope{}, 0, uidvalidity, nil
@@ -245,7 +291,7 @@ func (c *Client) MailboxChanges(ctx context.Context, mailbox string, knownValidi
 	if err != nil {
 		return delta, fmt.Errorf("select %q: %w", mailbox, err)
 	}
-	c.selected = mailbox
+	c.selected, c.selectedRO = mailbox, true
 	delta.UIDValidity, delta.Total = mbox.UidValidity, mbox.Messages
 
 	// UIDVALIDITY changed → the client's cached UIDs no longer identify the same
@@ -264,27 +310,26 @@ func (c *Client) MailboxChanges(ctx context.Context, mailbox string, knownValidi
 		}
 	}
 
-	// 1. Added — UIDs in (sinceUID+1):*, capped to the newest `limit`.
-	if mbox.Messages > 0 && sinceUID < ^uint32(0) {
-		crit := imap.NewSearchCriteria()
-		seq := new(imap.SeqSet)
-		seq.AddRange(sinceUID+1, 0) // "(sinceUID+1):*" — 0 means "*"
-		crit.Uid = seq
-		newUIDs, err := c.conn.UidSearch(crit)
+	// 1. Added — fetch the newest `limit` messages by sequence number in a single
+	// round trip (no preceding SEARCH), then keep only those strictly newer than
+	// the client's watermark. Bounded by `limit` regardless of backlog size.
+	if mbox.Messages > 0 {
+		low := uint32(1)
+		if mbox.Messages > uint32(limit) {
+			low = mbox.Messages - uint32(limit) + 1
+		}
+		recent, err := c.fetchEnvelopesSeq(low, mbox.Messages)
 		if err != nil {
-			return delta, fmt.Errorf("uid search added: %w", err)
+			return delta, err
 		}
-		if len(newUIDs) > limit {
-			newUIDs = newUIDs[len(newUIDs)-limit:]
-		}
-		if len(newUIDs) > 0 {
-			added, err := c.fetchEnvelopes(newUIDs)
-			if err != nil {
-				return delta, err
+		added := make([]hmail.Envelope, 0, len(recent))
+		for _, e := range recent {
+			if e.UID > sinceUID {
+				added = append(added, e)
 			}
-			reverseEnvelopes(added) // newest-first, matching ListMessages
-			delta.Added = added
 		}
+		reverseEnvelopes(added) // seq-ascending (oldest-first) → newest-first
+		delta.Added = added
 	}
 
 	// 2. Flags + removals among the known set. A known UID absent from the
@@ -321,6 +366,28 @@ func (c *Client) fetchEnvelopes(uids []uint32) ([]hmail.Envelope, error) {
 	}
 	if err := <-done; err != nil {
 		return nil, fmt.Errorf("fetch envelopes: %w", err)
+	}
+	return out, nil
+}
+
+// fetchEnvelopesSeq fetches list-view envelopes for the inclusive
+// sequence-number range [low, high] in ascending order. Used by the delta sync
+// to grab the newest messages in one round trip without a preceding SEARCH.
+// Caller must hold c.mu and have the mailbox SELECTed.
+func (c *Client) fetchEnvelopesSeq(low, high uint32) ([]hmail.Envelope, error) {
+	seq := new(imap.SeqSet)
+	seq.AddRange(low, high)
+	msgs := make(chan *imap.Message, high-low+1)
+	done := make(chan error, 1)
+	items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchFlags, imap.FetchUid, imap.FetchBodyStructure}
+	go func() { done <- c.conn.Fetch(seq, items, msgs) }()
+
+	var out []hmail.Envelope
+	for m := range msgs {
+		out = append(out, envelopeFrom(m))
+	}
+	if err := <-done; err != nil {
+		return nil, fmt.Errorf("fetch envelopes seq: %w", err)
 	}
 	return out, nil
 }
@@ -443,6 +510,77 @@ func (c *Client) GetMessage(ctx context.Context, mailbox string, uid uint32) (*h
 
 // ErrNotFound is returned when an operation cannot locate the requested item.
 var ErrNotFound = errors.New("not found")
+
+// Watch SELECTs mailbox (read-only) and blocks in IMAP IDLE, invoking onChange
+// whenever the server reports activity in that mailbox — a new message, an
+// expunge, or a flag change. It returns when ctx is cancelled (ctx.Err()) or the
+// connection fails; callers are expected to reconnect on a non-nil error.
+//
+// If the server lacks the IDLE capability, go-imap transparently falls back to
+// polling, so onChange still fires (just less promptly). Watch monopolises the
+// connection for its entire lifetime, so it MUST run on a dedicated Client —
+// never the one serving request/response API traffic (see Store.DialIMAP).
+func (c *Client) Watch(ctx context.Context, mailbox string, onChange func()) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err := c.ensureLive(ctx); err != nil {
+		return err
+	}
+	if _, err := c.conn.Select(mailbox, true); err != nil {
+		c.selected = ""
+		return fmt.Errorf("select %q: %w", mailbox, err)
+	}
+	c.selected, c.selectedRO = mailbox, true
+
+	// Diagnostic: confirm we're using real push (IDLE) and not go-imap's polling
+	// fallback. Polling shows up as detections spaced exactly one PollInterval
+	// apart, which masquerades as "slow to detect new mail".
+	idleOK, capErr := c.conn.Support("IDLE")
+	c.logger.Info("imap watch: starting", "mailbox", mailbox, "idle_supported", idleOK, "cap_err", capErr)
+
+	// IDLE blocks far longer than a normal command; the per-command deadline
+	// go-imap applies from c.Timeout would abort the wait. Disable it for the
+	// lifetime of this watch (the connection is dedicated and short-lived).
+	c.conn.Timeout = 0
+
+	updates := make(chan client.Update, 16)
+	c.conn.Updates = updates
+	defer func() { c.conn.Updates = nil }()
+
+	stop := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		// LogoutTimeout restarts IDLE before the server's inactivity cutoff;
+		// PollInterval is used only when the server lacks IDLE.
+		done <- c.conn.Idle(stop, &client.IdleOptions{
+			LogoutTimeout: 25 * time.Minute,
+			PollInterval:  10 * time.Second, // safety net if the server lacks IDLE
+		})
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			close(stop)
+			<-done // let Idle unwind cleanly before the caller closes the conn
+			return ctx.Err()
+		case err := <-done:
+			// Idle returned on its own — the connection broke or the server
+			// closed it. Surface so the caller reconnects.
+			if err != nil {
+				return err
+			}
+			return errors.New("imap idle ended unexpectedly")
+		case u := <-updates:
+			switch u.(type) {
+			case *client.MailboxUpdate, *client.MessageUpdate, *client.ExpungeUpdate:
+				if onChange != nil {
+					onChange()
+				}
+			}
+		}
+	}
+}
 
 func parseRFC822(r io.Reader) (*hmail.Message, error) {
 	mr, err := gomail.CreateReader(r)

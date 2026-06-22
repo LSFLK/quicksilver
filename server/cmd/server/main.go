@@ -16,6 +16,7 @@ import (
 	"quicksilver/server/internal/config"
 	apihttp "quicksilver/server/internal/http"
 	applog "quicksilver/server/internal/log"
+	"quicksilver/server/internal/realtime"
 	"quicksilver/server/internal/session"
 	"quicksilver/server/internal/smtp"
 )
@@ -60,6 +61,7 @@ func main() {
 	}
 	sessions := session.NewStore(bgCtx, sealer, cfg.SessionIdleTTL, cfg.SessionSweepInt, cfg.IMAPTimeout, logger)
 	sender := smtp.New(cfg.SMTPTimeout)
+	hub := realtime.NewHub(logger)
 
 	router := apihttp.NewRouter(apihttp.Deps{
 		Config:       cfg,
@@ -70,6 +72,7 @@ func main() {
 		Issuer:       issuer,
 		Sealer:       sealer,
 		Sender:       sender,
+		Hub:          hub,
 		RateLimitCtx: bgCtx,
 	})
 

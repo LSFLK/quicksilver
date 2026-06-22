@@ -29,6 +29,9 @@ const ThreadList = ({
   // Optional delta-sync trigger. When provided, a refresh button is shown in the
   // pager bar; it fetches only what changed since the last sync (proposal §6).
   onRefresh = undefined,
+  // When true, a small "Live" indicator shows that the realtime SSE stream is
+  // connected and new mail will push in without a manual refresh (Phase 4).
+  live = undefined,
 }) => {
   const navigate = useNavigate();
   const parentRef = useRef(null);
@@ -89,8 +92,8 @@ const ThreadList = ({
 
   // Pager math. start/end are 1-based and reflect the rows actually shown.
   const showPager = !!(onNext || onPrev) && total > 0;
-  // The top bar appears for the pager and/or the refresh button.
-  const showBar = showPager || !!onRefresh;
+  // The top bar appears for the pager, the refresh button, and/or the live dot.
+  const showBar = showPager || !!onRefresh || live !== undefined;
   const start = page * pageSize + 1;
   const end = page * pageSize + threads.length;
   const canPrev = page > 0 && !pageLoading;
@@ -119,18 +122,39 @@ const ThreadList = ({
             minHeight: 44,
           }}
         >
-          {onRefresh && (
-            <IconButton
-              size="small"
-              aria-label="Refresh"
-              title="Refresh (delta sync)"
-              disabled={refreshing}
-              onClick={handleRefresh}
-              sx={{ mr: "auto" }}
-            >
-              {refreshing ? <CircularProgress size={18} /> : <RefreshIcon />}
-            </IconButton>
-          )}
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mr: "auto" }}>
+            {onRefresh && (
+              <IconButton
+                size="small"
+                aria-label="Refresh"
+                title="Refresh (delta sync)"
+                disabled={refreshing}
+                onClick={handleRefresh}
+              >
+                {refreshing ? <CircularProgress size={18} /> : <RefreshIcon />}
+              </IconButton>
+            )}
+            {live !== undefined && (
+              <Box
+                title={live ? "Live — new mail arrives instantly" : "Reconnecting…"}
+                sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+              >
+                <Box
+                  sx={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: "50%",
+                    backgroundColor: live ? "success.main" : "text.disabled",
+                    boxShadow: live ? "0 0 0 3px rgba(46,125,50,0.15)" : "none",
+                    transition: "background-color 0.2s",
+                  }}
+                />
+                <Typography variant="caption" color="text.secondary">
+                  {live ? "Live" : "Offline"}
+                </Typography>
+              </Box>
+            )}
+          </Box>
           {showPager && (
             <>
               {pageLoading && <CircularProgress size={16} sx={{ mr: 1 }} />}

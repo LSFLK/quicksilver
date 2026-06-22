@@ -87,6 +87,8 @@ interface DataContextValue {
   contacts: Participant[];
   loading: boolean;
   error: string | null;
+  // True while the realtime SSE stream is connected (new mail pushes live).
+  realtimeConnected: boolean;
   unreadCount: number;
   // Page-based pagination keyed by role ("inbox" | "sent" | "drafts" | "trash").
   // page[role] is the 0-based current page; total[role] is the mailbox's full
@@ -228,6 +230,11 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
   const [trashedThreads, setTrashedThreads] = useState<Thread[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Resolved INBOX name (provider-specific). Held in state so the realtime
+  // effect can (re)open the SSE stream once the mailbox list is known.
+  const [inboxName, setInboxName] = useState<string>("");
+  // Whether the realtime SSE stream is currently connected.
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
 
   // Pagination bookkeeping per folder role.
   const [page, setPage] = useState<Record<string, number>>({});
@@ -274,6 +281,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         setMailboxList(resp.mailboxes || []);
         const roles = resolveRoles(resp.mailboxes || []);
         rolesRef.current = roles;
+        setInboxName(roles.inbox || "");
 
         // Use allSettled so a failure in one folder (e.g. a provider with no
         // "Drafts" mailbox, or a transient upstream error) doesn't wipe out
@@ -569,6 +577,64 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     }
   }, [loadAll, syncRole]);
 
+  // Keep a live reference to syncRole so the realtime effect can call the
+  // latest version without re-subscribing the SSE stream every time syncRole's
+  // identity changes (which would needlessly tear down the IMAP IDLE watcher).
+  const syncRoleRef = useRef(syncRole);
+  useEffect(() => {
+    syncRoleRef.current = syncRole;
+  }, [syncRole]);
+
+  // Realtime push (proposal §6, Phase 4). Open one SSE stream that watches the
+  // inbox; when the gateway's IMAP IDLE connection reports a change it pushes a
+  // tiny "changed" event, and we run a delta sync for the affected folder. The
+  // event carries only the mailbox name — the actual delta is pulled over the
+  // regular sync path, so the push stays lightweight.
+  useEffect(() => {
+    if (!isAuthenticated || !inboxName) return;
+
+    const url = apiClient.sseURL("/api/v1/events", { mailbox: inboxName });
+    const es = new EventSource(url);
+
+    // Coalesce bursts of IDLE updates (e.g. a flag change + arrival) into one
+    // sync per folder.
+    const timers: Record<string, ReturnType<typeof setTimeout>> = {};
+    const scheduleSync = (role: string) => {
+      if (timers[role]) clearTimeout(timers[role]);
+      timers[role] = setTimeout(() => {
+        delete timers[role];
+        void syncRoleRef.current(role);
+      }, 60);
+    };
+
+    const onOpen = () => setRealtimeConnected(true);
+    const onError = () => setRealtimeConnected(false); // EventSource auto-reconnects
+    const onChanged = (e: MessageEvent) => {
+      let mailbox = inboxName;
+      try {
+        mailbox = (JSON.parse(e.data) as { mailbox?: string }).mailbox || inboxName;
+      } catch {
+        // Malformed payload — fall back to syncing the inbox.
+      }
+      // Map the mailbox name back to a role; default to inbox.
+      const entry = Object.entries(rolesRef.current).find(
+        ([, name]) => name === mailbox,
+      );
+      scheduleSync(entry ? entry[0] : "inbox");
+    };
+
+    es.addEventListener("open", onOpen);
+    es.addEventListener("error", onError);
+    es.addEventListener("changed", onChanged as EventListener);
+
+    return () => {
+      for (const t of Object.values(timers)) clearTimeout(t);
+      es.removeEventListener("changed", onChanged as EventListener);
+      es.close();
+      setRealtimeConnected(false);
+    };
+  }, [isAuthenticated, apiClient, inboxName]);
+
   const allThreads = useMemo(
     () => [...threads, ...sentThreads, ...drafts, ...trashedThreads],
     [threads, sentThreads, drafts, trashedThreads],
@@ -763,6 +829,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     contacts,
     loading,
     error,
+    realtimeConnected,
     unreadCount,
     page,
     total,
