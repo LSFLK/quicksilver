@@ -158,16 +158,17 @@ func (s *Store) Get(id string) (*Session, bool) {
 }
 
 // IMAPFor returns the live IMAP client for the session, transparently
-// reconnecting from sealed credentials if the previous connection was dropped.
+// reconnecting from sealed credentials if there is no connection yet.
+//
+// We deliberately do NOT probe the existing connection with a NOOP here: every
+// Client operation already calls ensureLive, which NOOPs and self-heals from the
+// stored credentials on failure. Probing here too would add a full extra
+// round-trip to the IMAP server (~one RTT) on every request for no benefit.
 func (s *Store) IMAPFor(ctx context.Context, sess *Session) (*imap.Client, error) {
 	sess.mu.Lock()
 	defer sess.mu.Unlock()
 	if sess.imap != nil {
-		if err := sess.imap.Ping(ctx); err == nil {
-			return sess.imap, nil
-		}
-		_ = sess.imap.Close()
-		sess.imap = nil
+		return sess.imap, nil
 	}
 	creds, err := s.sealer.Open(sess.sealed)
 	if err != nil {
@@ -179,6 +180,25 @@ func (s *Store) IMAPFor(ctx context.Context, sess *Session) (*imap.Client, error
 	}
 	sess.imap = c
 	return c, nil
+}
+
+// DialIMAP opens a NEW, dedicated IMAP connection for the session from its
+// sealed credentials. Unlike IMAPFor it does not cache the connection on the
+// session: the caller owns the returned client and must Close it. Used for
+// long-lived IDLE watchers, which monopolise a connection and so must not run
+// on the session's shared request/response client.
+func (s *Store) DialIMAP(ctx context.Context, sess *Session) (*imap.Client, error) {
+	sess.mu.Lock()
+	sealed := append([]byte(nil), sess.sealed...)
+	sess.mu.Unlock()
+	if len(sealed) == 0 {
+		return nil, errors.New("session has no credentials")
+	}
+	creds, err := s.sealer.Open(sealed)
+	if err != nil {
+		return nil, fmt.Errorf("unseal creds: %w", err)
+	}
+	return imap.New(ctx, creds, s.imapTimeout, s.logger)
 }
 
 // Delete removes the session and closes its IMAP connection.
@@ -223,6 +243,31 @@ func (s *Store) sweepLoop(ctx context.Context) {
 			return
 		case <-t.C:
 			s.sweep()
+			s.keepalive(ctx)
+		}
+	}
+}
+
+// keepalive NOOPs every live session's IMAP connection so it stays warm between
+// user actions. Without this, a connection idle longer than the provider's
+// timeout (Gmail drops idle connections) goes cold, and the next delta sync pays
+// a full TLS reconnect + LOGIN — the dominant latency on the realtime path.
+func (s *Store) keepalive(ctx context.Context) {
+	s.mu.RLock()
+	sessions := make([]*Session, 0, len(s.sessions))
+	for _, sess := range s.sessions {
+		sessions = append(sessions, sess)
+	}
+	s.mu.RUnlock()
+	for _, sess := range sessions {
+		sess.mu.Lock()
+		c := sess.imap
+		sess.mu.Unlock()
+		if c == nil {
+			continue
+		}
+		if err := c.Keepalive(ctx); err != nil {
+			s.logger.Debug("session keepalive failed", "session_id", sess.ID, "err", err)
 		}
 	}
 }

@@ -16,6 +16,8 @@ import {
   patchThread,
   readBody,
   writeBody,
+  readUidValidity,
+  writeUidValidity,
 } from "../cache/db";
 import type {
   Address,
@@ -85,6 +87,8 @@ interface DataContextValue {
   contacts: Participant[];
   loading: boolean;
   error: string | null;
+  // True while the realtime SSE stream is connected (new mail pushes live).
+  realtimeConnected: boolean;
   unreadCount: number;
   // Page-based pagination keyed by role ("inbox" | "sent" | "drafts" | "trash").
   // page[role] is the 0-based current page; total[role] is the mailbox's full
@@ -97,6 +101,8 @@ interface DataContextValue {
   nextPage: (role: string) => Promise<void>;
   prevPage: (role: string) => Promise<void>;
   refresh: () => Promise<void>;
+  // Delta-sync just one folder by role ("inbox" | "sent" | "drafts" | "trash").
+  refreshFolder: (role: string) => Promise<void>;
   getThread: (id: string) => Thread | undefined;
   getMessages: (threadId: string) => Promise<ThreadMessage[]>;
   // Cache-first body read; returns null if nothing is cached for the thread.
@@ -224,6 +230,11 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
   const [trashedThreads, setTrashedThreads] = useState<Thread[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Resolved INBOX name (provider-specific). Held in state so the realtime
+  // effect can (re)open the SSE stream once the mailbox list is known.
+  const [inboxName, setInboxName] = useState<string>("");
+  // Whether the realtime SSE stream is currently connected.
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
 
   // Pagination bookkeeping per folder role.
   const [page, setPage] = useState<Record<string, number>>({});
@@ -270,6 +281,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         setMailboxList(resp.mailboxes || []);
         const roles = resolveRoles(resp.mailboxes || []);
         rolesRef.current = roles;
+        setInboxName(roles.inbox || "");
 
         // Use allSettled so a failure in one folder (e.g. a provider with no
         // "Drafts" mailbox, or a transient upstream error) doesn't wipe out
@@ -304,6 +316,8 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
           const fresh = msgs.map((e) => envelopeToThread(e, mailbox || ""));
           set(fresh);
           void writeThreads(account, role, fresh);
+          // Persist UIDVALIDITY so a later refresh can sync via a delta.
+          if (val.uidvalidity) void writeUidValidity(account, role, val.uidvalidity);
           // Reset to page 0; cursor for page 1 is this page's next_before.
           pageCursors.current[role] = [undefined, val.next_before];
           setPage((p) => ({ ...p, [role]: 0 }));
@@ -353,7 +367,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     return () => ctrl.abort();
   }, [isAuthenticated, loadAll, hydrateFromCache]);
 
-  const refresh = useCallback(() => loadAll(), [loadAll]);
+  // `refresh` is defined below, after the pagination helpers it depends on.
 
   // Maps a role to its current thread array's state setter.
   const setterForRole = useCallback(
@@ -401,7 +415,10 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
         cursors[target + 1] = resp.next_before;
         pageCursors.current[role] = cursors;
         // Only page 0 is mirrored to the offline cache (the "newest" view).
-        if (target === 0) void writeThreads(account, role, fresh);
+        if (target === 0) {
+          void writeThreads(account, role, fresh);
+          if (resp.uidvalidity) void writeUidValidity(account, role, resp.uidvalidity);
+        }
       } catch (err) {
         if ((err as { name?: string })?.name !== "AbortError") {
           setError((err as Error).message || "Failed to load page");
@@ -437,6 +454,186 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     },
     [page, pageLoading, fetchPage],
   );
+
+  // Incremental sync for one folder (proposal §6). Diffs the cached page-0 view
+  // against the server and applies only added/removed/flag-changed messages,
+  // instead of re-listing the whole page. Falls back to a full page-0 fetch when
+  // there's no baseline to diff against, or when the server signals a resync
+  // (UIDVALIDITY changed → cached UIDs are stale).
+  const syncRole = useCallback(
+    async (role: string): Promise<void> => {
+      const mailbox = rolesRef.current[role];
+      const set = setterForRole(role);
+      if (!mailbox || !set) return;
+
+      const cached = await readThreads(account, role);
+      const known = cached.map((t) => t.uid).filter((u) => u > 0);
+      const uidvalidity = await readUidValidity(account, role);
+      // Cold folder or unknown UIDVALIDITY → nothing to diff; do a full fetch.
+      if (!uidvalidity || known.length === 0) {
+        await fetchPage(role, 0, undefined);
+        return;
+      }
+
+      const delta = await mailboxesAPI.changes(apiClient, mailbox, {
+        uidvalidity,
+        known,
+        limit: PAGE_SIZE,
+      });
+      if (delta.resync) {
+        await fetchPage(role, 0, undefined);
+        return;
+      }
+
+      // Reconcile against the cached baseline, keyed on UID and applied
+      // idempotently so repeated syncs converge to the same result.
+      let next = cached.slice();
+
+      if (delta.removed?.length) {
+        const gone = new Set(delta.removed);
+        next = next.filter((t) => !gone.has(t.uid));
+      }
+      if (delta.flags?.length) {
+        const flagsByUid = new Map(delta.flags.map((f) => [f.uid, f.flags]));
+        next = next.map((t) => {
+          const fl = flagsByUid.get(t.uid);
+          if (!fl) return t;
+          const unread = fl.includes("\\Seen") ? 0 : 1;
+          return unread === t.unreadCount ? t : { ...t, unreadCount: unread };
+        });
+      }
+      if (delta.added?.length) {
+        const have = new Set(next.map((t) => t.uid));
+        const fresh = delta.added
+          .filter((e) => !have.has(e.uid))
+          .map((e) => envelopeToThread(e, mailbox));
+        next = [...fresh, ...next];
+      }
+
+      // Keep the newest-first page-0 window.
+      next.sort(
+        (a, b) =>
+          new Date(b.lastMessageTime).getTime() -
+          new Date(a.lastMessageTime).getTime(),
+      );
+      if (next.length > PAGE_SIZE) next = next.slice(0, PAGE_SIZE);
+
+      set(next);
+      void writeThreads(account, role, next);
+      void writeUidValidity(account, role, delta.uidvalidity);
+      setPage((p) => ({ ...p, [role]: 0 }));
+      setTotal((t) => ({ ...t, [role]: delta.total }));
+      // Cursor for page 1 is the oldest UID currently shown.
+      const oldestUid = next.reduce(
+        (min, t) => (t.uid > 0 && t.uid < min ? t.uid : min),
+        Number.MAX_SAFE_INTEGER,
+      );
+      pageCursors.current[role] = [
+        undefined,
+        oldestUid === Number.MAX_SAFE_INTEGER ? undefined : oldestUid,
+      ];
+    },
+    [apiClient, account, setterForRole, fetchPage],
+  );
+
+  // Delta-sync a single folder — the one the user is looking at. Scoping the
+  // refresh to one folder avoids contending four mailbox syncs on the session's
+  // single IMAP connection (they would otherwise serialise on its mutex, each
+  // paying a full SELECT). Falls back to a full load if roles aren't resolved
+  // yet (refresh raced ahead of the initial load).
+  const refreshFolder = useCallback(
+    async (role: string): Promise<void> => {
+      if (!rolesRef.current[role]) {
+        await loadAll();
+        return;
+      }
+      setError(null);
+      try {
+        await syncRole(role);
+      } catch (err) {
+        if ((err as { name?: string })?.name !== "AbortError") {
+          setError((err as Error).message || `Could not sync ${role}`);
+        }
+      }
+    },
+    [loadAll, syncRole],
+  );
+
+  // Refresh every folder (e.g. a global "sync all"). Pages use refreshFolder for
+  // their own folder; this is kept for callers that genuinely want all of them.
+  const refresh = useCallback(async (): Promise<void> => {
+    if (Object.keys(rolesRef.current).length === 0) {
+      await loadAll();
+      return;
+    }
+    setError(null);
+    const roles = ["inbox", "sent", "drafts", "trash"];
+    const results = await Promise.allSettled(roles.map((role) => syncRole(role)));
+    const failed = results
+      .map((s, i) => ({ s, role: roles[i] }))
+      .filter(({ s }) => s.status === "rejected");
+    if (failed.length > 0) {
+      setError(`Could not sync: ${failed.map(({ role }) => role).join(", ")}`);
+    }
+  }, [loadAll, syncRole]);
+
+  // Keep a live reference to syncRole so the realtime effect can call the
+  // latest version without re-subscribing the SSE stream every time syncRole's
+  // identity changes (which would needlessly tear down the IMAP IDLE watcher).
+  const syncRoleRef = useRef(syncRole);
+  useEffect(() => {
+    syncRoleRef.current = syncRole;
+  }, [syncRole]);
+
+  // Realtime push (proposal §6, Phase 4). Open one SSE stream that watches the
+  // inbox; when the gateway's IMAP IDLE connection reports a change it pushes a
+  // tiny "changed" event, and we run a delta sync for the affected folder. The
+  // event carries only the mailbox name — the actual delta is pulled over the
+  // regular sync path, so the push stays lightweight.
+  useEffect(() => {
+    if (!isAuthenticated || !inboxName) return;
+
+    const url = apiClient.sseURL("/api/v1/events", { mailbox: inboxName });
+    const es = new EventSource(url);
+
+    // Coalesce bursts of IDLE updates (e.g. a flag change + arrival) into one
+    // sync per folder.
+    const timers: Record<string, ReturnType<typeof setTimeout>> = {};
+    const scheduleSync = (role: string) => {
+      if (timers[role]) clearTimeout(timers[role]);
+      timers[role] = setTimeout(() => {
+        delete timers[role];
+        void syncRoleRef.current(role);
+      }, 60);
+    };
+
+    const onOpen = () => setRealtimeConnected(true);
+    const onError = () => setRealtimeConnected(false); // EventSource auto-reconnects
+    const onChanged = (e: MessageEvent) => {
+      let mailbox = inboxName;
+      try {
+        mailbox = (JSON.parse(e.data) as { mailbox?: string }).mailbox || inboxName;
+      } catch {
+        // Malformed payload — fall back to syncing the inbox.
+      }
+      // Map the mailbox name back to a role; default to inbox.
+      const entry = Object.entries(rolesRef.current).find(
+        ([, name]) => name === mailbox,
+      );
+      scheduleSync(entry ? entry[0] : "inbox");
+    };
+
+    es.addEventListener("open", onOpen);
+    es.addEventListener("error", onError);
+    es.addEventListener("changed", onChanged as EventListener);
+
+    return () => {
+      for (const t of Object.values(timers)) clearTimeout(t);
+      es.removeEventListener("changed", onChanged as EventListener);
+      es.close();
+      setRealtimeConnected(false);
+    };
+  }, [isAuthenticated, apiClient, inboxName]);
 
   const allThreads = useMemo(
     () => [...threads, ...sentThreads, ...drafts, ...trashedThreads],
@@ -632,6 +829,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     contacts,
     loading,
     error,
+    realtimeConnected,
     unreadCount,
     page,
     total,
@@ -640,6 +838,7 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
     nextPage,
     prevPage,
     refresh,
+    refreshFolder,
     getThread,
     getMessages,
     getCachedMessages,

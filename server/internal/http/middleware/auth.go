@@ -49,8 +49,12 @@ func RequireSession(issuer *auth.Issuer, store *session.Store) func(http.Handler
 func bearerToken(r *http.Request) string {
 	h := r.Header.Get("Authorization")
 	const prefix = "Bearer "
-	if !strings.HasPrefix(h, prefix) {
-		return ""
+	if strings.HasPrefix(h, prefix) {
+		return strings.TrimSpace(h[len(prefix):])
 	}
-	return strings.TrimSpace(h[len(prefix):])
+	// Fall back to the access_token query param. The browser EventSource API
+	// (used by the SSE /events stream) cannot set an Authorization header, so it
+	// passes the token in the query string. Safe here because the access log
+	// records only r.URL.Path, never the raw query.
+	return strings.TrimSpace(r.URL.Query().Get("access_token"))
 }

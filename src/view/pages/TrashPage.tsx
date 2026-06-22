@@ -14,6 +14,7 @@ function TrashPage() {
     pageLoading,
     nextPage,
     prevPage,
+    refreshFolder,
   } = useData();
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -46,6 +47,7 @@ function TrashPage() {
         pageLoading={pageLoading.trash}
         onNext={searchQuery ? undefined : () => nextPage("trash")}
         onPrev={searchQuery ? undefined : () => prevPage("trash")}
+        onRefresh={searchQuery ? undefined : () => refreshFolder("trash")}
       />
     </AppLayout>
   );

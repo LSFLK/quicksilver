@@ -11,6 +11,7 @@ import (
 	"quicksilver/server/internal/config"
 	"quicksilver/server/internal/http/handlers"
 	"quicksilver/server/internal/http/middleware"
+	"quicksilver/server/internal/realtime"
 	"quicksilver/server/internal/session"
 	"quicksilver/server/internal/smtp"
 )
@@ -25,6 +26,7 @@ type Deps struct {
 	Issuer   *auth.Issuer
 	Sealer   *session.Sealer
 	Sender   *smtp.Sender
+	Hub      *realtime.Hub
 	// RateLimitCtx scopes the rate limiter's background reaper. When the
 	// context is cancelled, the limiter stops reaping idle IP entries.
 	RateLimitCtx context.Context
@@ -47,6 +49,7 @@ func NewRouter(d Deps) http.Handler {
 	authH := &handlers.Auth{Sessions: d.Sessions, Issuer: d.Issuer, Logger: d.Logger}
 	mboxH := &handlers.Mailboxes{Sessions: d.Sessions, Logger: d.Logger}
 	msgH := &handlers.Messages{Sessions: d.Sessions, Sealer: d.Sealer, Sender: d.Sender, Logger: d.Logger}
+	eventsH := &handlers.Events{Sessions: d.Sessions, Hub: d.Hub, Logger: d.Logger}
 
 	requireSession := middleware.RequireSession(d.Issuer, d.Sessions)
 
@@ -63,10 +66,15 @@ func NewRouter(d Deps) http.Handler {
 			r.Use(requireSession)
 			r.Get("/mailboxes", mboxH.List)
 			r.Get("/mailboxes/{mailbox}/messages", mboxH.ListMessages)
+			r.Get("/mailboxes/{mailbox}/changes", mboxH.Changes)
 			r.Get("/mailboxes/{mailbox}/messages/{uid}", msgH.Get)
 			r.Patch("/mailboxes/{mailbox}/messages/{uid}/flags", msgH.SetFlags)
 			r.Delete("/mailboxes/{mailbox}/messages/{uid}", msgH.Delete)
 			r.Post("/messages", msgH.Send)
+
+			// Realtime change stream (SSE). RequireSession also accepts the JWT
+			// as an access_token query param since EventSource can't set headers.
+			r.Get("/events", eventsH.Stream)
 		})
 	})
 

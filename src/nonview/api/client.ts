@@ -108,6 +108,17 @@ export class APIClient {
   postUnauthed<T>(path: string, body?: unknown): Promise<T> {
     return this.request<T>("POST", path, body, { auth: false });
   }
+
+  // Builds an absolute URL for an SSE (EventSource) endpoint. The browser
+  // EventSource API cannot set an Authorization header, so the JWT rides along
+  // as the access_token query param, which the backend's RequireSession accepts.
+  sseURL(path: string, params: Record<string, string> = {}): string {
+    const qs = new URLSearchParams(params);
+    const tok = this.getToken();
+    if (tok) qs.set("access_token", tok);
+    const query = qs.toString();
+    return `${this.baseURL}${path}${query ? `?${query}` : ""}`;
+  }
 }
 
 // Resolves the API base URL from Vite env, falling back to a same-origin /api

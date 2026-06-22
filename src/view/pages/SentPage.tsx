@@ -14,6 +14,7 @@ function SentPage() {
     pageLoading,
     nextPage,
     prevPage,
+    refreshFolder,
   } = useData();
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -46,6 +47,7 @@ function SentPage() {
         pageLoading={pageLoading.sent}
         onNext={searchQuery ? undefined : () => nextPage("sent")}
         onPrev={searchQuery ? undefined : () => prevPage("sent")}
+        onRefresh={searchQuery ? undefined : () => refreshFolder("sent")}
       />
     </AppLayout>
   );

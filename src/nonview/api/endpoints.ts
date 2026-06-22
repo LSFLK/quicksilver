@@ -6,6 +6,7 @@ import type { APIClient } from "./client";
 import type {
   LoginRequest,
   LoginResponse,
+  MailboxDelta,
   MailboxListResponse,
   Message,
   MessageListResponse,
@@ -41,6 +42,25 @@ export const mailboxes = {
       qs ? `?${qs}` : ""
     }`;
     return client.get<MessageListResponse>(path, signal);
+  },
+  // Incremental sync (proposal §6): given the client's cached UIDVALIDITY and
+  // the UIDs it already holds, return only what changed. `known` is sent as a
+  // comma-separated UID list; the server derives the "since" watermark from it.
+  changes(
+    client: APIClient,
+    mailbox: string,
+    opts: { uidvalidity?: number; known?: number[]; limit?: number } = {},
+    signal?: AbortSignal,
+  ) {
+    const params = new URLSearchParams();
+    if (opts.uidvalidity) params.set("uidvalidity", String(opts.uidvalidity));
+    if (opts.limit) params.set("limit", String(opts.limit));
+    if (opts.known && opts.known.length) params.set("known", opts.known.join(","));
+    const qs = params.toString();
+    const path = `${v1}/mailboxes/${encodeURIComponent(mailbox)}/changes${
+      qs ? `?${qs}` : ""
+    }`;
+    return client.get<MailboxDelta>(path, signal);
   },
 };
 
