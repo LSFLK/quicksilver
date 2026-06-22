@@ -80,6 +80,14 @@ func (s *Session) Credentials(sealer *Sealer) (mail.Credentials, error) {
 	return sealer.Open(sealed)
 }
 
+// TokenRefresher mints a fresh OAuth2 access token from a stored token,
+// refreshing via the refresh token when the access token has expired. It
+// reports whether the token changed so the store can re-seal it. Implemented by
+// internal/oauth.Provider.
+type TokenRefresher interface {
+	FreshToken(ctx context.Context, accessToken, refreshToken string, expiry time.Time) (newAccess, newRefresh string, newExpiry time.Time, changed bool, err error)
+}
+
 // Store holds active sessions in process memory.
 type Store struct {
 	sealer        *Sealer
@@ -87,9 +95,33 @@ type Store struct {
 	sweepInterval time.Duration
 	imapTimeout   time.Duration
 	logger        *slog.Logger
+	tokens        TokenRefresher // nil unless OAuth is configured
 
 	mu       sync.RWMutex
 	sessions map[string]*Session
+}
+
+// SetTokenRefresher installs the OAuth token refresher used to keep XOAUTH2
+// sessions alive across reconnects. Call once at startup before serving.
+func (s *Store) SetTokenRefresher(t TokenRefresher) { s.tokens = t }
+
+// refreshOAuth refreshes c's access token in place when c is an OAuth session
+// and a refresher is configured. Returns whether the token changed. The caller
+// is responsible for re-sealing the session when it reports true.
+func (s *Store) refreshOAuth(ctx context.Context, c *mail.Credentials) (bool, error) {
+	if !c.IsOAuth() || s.tokens == nil {
+		return false, nil
+	}
+	access, refresh, expiry, changed, err := s.tokens.FreshToken(ctx, c.AccessToken, c.RefreshToken, c.TokenExpiry)
+	if err != nil {
+		return false, err
+	}
+	if changed {
+		c.AccessToken = access
+		c.RefreshToken = refresh
+		c.TokenExpiry = expiry
+	}
+	return changed, nil
 }
 
 // NewStore constructs a Store and starts the idle-eviction sweeper.
@@ -173,12 +205,42 @@ func (s *Store) IMAPFor(ctx context.Context, sess *Session) (*imap.Client, error
 	if err != nil {
 		return nil, fmt.Errorf("unseal creds: %w", err)
 	}
+	// For OAuth sessions the stored access token may have expired since the last
+	// connection; refresh it (and re-seal) before reconnecting.
+	if changed, err := s.refreshOAuth(ctx, &creds); err != nil {
+		return nil, err
+	} else if changed {
+		if resealed, err := s.sealer.Seal(creds); err == nil {
+			sess.sealed = resealed
+		}
+	}
 	c, err := imap.New(ctx, creds, s.imapTimeout, s.logger)
 	if err != nil {
 		return nil, err
 	}
 	sess.imap = c
 	return c, nil
+}
+
+// FreshCredentials unseals the session's credentials, refreshing the OAuth
+// access token if needed (and re-sealing the session). Use this for the SMTP
+// send path so XOAUTH2 always presents a valid bearer token. Callers must not
+// retain the returned struct.
+func (s *Store) FreshCredentials(ctx context.Context, sess *Session) (mail.Credentials, error) {
+	sess.mu.Lock()
+	defer sess.mu.Unlock()
+	creds, err := s.sealer.Open(sess.sealed)
+	if err != nil {
+		return mail.Credentials{}, fmt.Errorf("unseal creds: %w", err)
+	}
+	if changed, err := s.refreshOAuth(ctx, &creds); err != nil {
+		return mail.Credentials{}, err
+	} else if changed {
+		if resealed, err := s.sealer.Seal(creds); err == nil {
+			sess.sealed = resealed
+		}
+	}
+	return creds, nil
 }
 
 // Delete removes the session and closes its IMAP connection.
@@ -259,12 +321,20 @@ func validateCreds(c mail.Credentials) error {
 	switch {
 	case c.Email == "":
 		return errors.New("email is required")
-	case c.Password == "":
-		return errors.New("password is required")
 	case c.IMAPHost == "" || c.IMAPPort == 0:
 		return errors.New("imap host and port are required")
 	case c.SMTPHost == "" || c.SMTPPort == 0:
 		return errors.New("smtp host and port are required")
+	}
+	// OAuth sessions authenticate with a bearer token instead of a password.
+	if c.IsOAuth() {
+		if c.AccessToken == "" {
+			return errors.New("oauth access token is required")
+		}
+		return nil
+	}
+	if c.Password == "" {
+		return errors.New("password is required")
 	}
 	return nil
 }
