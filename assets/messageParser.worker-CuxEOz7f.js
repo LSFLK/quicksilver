@@ -1,0 +1,2 @@
+(function(){function e(e){return e.replace(/<style[^>]*>[\s\S]*?<\/style>/gi,``).replace(/<script[^>]*>[\s\S]*?<\/script>/gi,``).replace(/<[^>]+>/g,` `).replace(/\s+/g,` `).trim()}let t=self;t.onmessage=n=>{let{id:r,bodyText:i,bodyHtml:a}=n.data,o=i||e(a||``);t.postMessage({id:r,content:o})}})();
+//# sourceMappingURL=messageParser.worker-CuxEOz7f.js.map
