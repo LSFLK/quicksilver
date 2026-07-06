@@ -1,12 +1,18 @@
-import React, { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Box, CircularProgress, Alert } from "@mui/material";
+import { Box, CircularProgress, Alert, Snackbar } from "@mui/material";
 import AppLayout from "../moles/AppLayout";
 import ThreadHeader from "../moles/ThreadHeader";
 import ThreadView from "../moles/ThreadView";
-import MessageComposer from "../moles/MessageComposer";
+import ReplyBar from "../moles/ReplyBar";
 import EmptyState from "../atoms/EmptyState";
+
+// Reply/forward reuses the compose interface, which pulls in react-email. Keep
+// it out of the main bundle — only load it when the user opens a reply popup.
+const ComposeDialog = lazy(() => import("../moles/ComposeDialog"));
 import { useData } from "../../nonview/core/DataContext";
+import { useAuth } from "../../nonview/core/AuthContext";
+import { buildReplyContext, type ReplyMode } from "../../nonview/core/replyContext";
 
 function ThreadPage() {
   const { threadId } = useParams();
@@ -14,18 +20,27 @@ function ThreadPage() {
     getThread,
     getMessages,
     getCachedMessages,
-    sendMessage,
     markAsRead,
     downloadAttachment,
     fetchAttachment,
     loading,
   } = useData();
+  const { currentUser } = useAuth();
 
   const thread = threadId ? getThread(threadId) : undefined;
 
   const [messages, setMessages] = useState([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messagesError, setMessagesError] = useState(null);
+
+  // Reply/forward compose popup state.
+  const [replyMode, setReplyMode] = useState<ReplyMode | null>(null);
+  const [sentToast, setSentToast] = useState(false);
+
+  const replyCtx = useMemo(() => {
+    if (!replyMode || !thread) return null;
+    return buildReplyContext(replyMode, thread, messages, currentUser?.email);
+  }, [replyMode, thread, messages, currentUser]);
 
   // Fetch the message body once per thread. `getMessages` is memoized in
   // DataContext (deps: [apiClient]), so this effect only re-runs when the
@@ -74,11 +89,6 @@ function ThreadPage() {
       console.warn("markAsRead failed", e),
     );
   }, [threadId, thread, markAsRead]);
-
-  const handleSendMessage = async (messageData) => {
-    if (!threadId) return;
-    await sendMessage(threadId, messageData.content);
-  };
 
   if (loading && !thread) {
     return (
@@ -137,16 +147,57 @@ function ThreadPage() {
             }
           />
         </Box>
-        <Box
-          sx={{
-            borderTop: 1,
-            borderColor: "divider",
-            backgroundColor: "background.paper",
-          }}
-        >
-          <MessageComposer threadId={threadId} onSend={handleSendMessage} />
-        </Box>
+        <ReplyBar
+          canReplyAll={(thread.participants || []).length > 1}
+          onReply={() => setReplyMode("reply")}
+          onReplyAll={() => setReplyMode("replyAll")}
+          onForward={() => setReplyMode("forward")}
+        />
       </Box>
+
+      {replyCtx && (
+        <Suspense fallback={null}>
+          <ComposeDialog
+            open
+            onClose={() => setReplyMode(null)}
+            onSent={(sent) => {
+              setReplyMode(null);
+              setSentToast(true);
+              // Optimistically show the sent reply in the open conversation.
+              // The real copy lives in the Sent mailbox, so a refetch of this
+              // thread wouldn't surface it; append it locally instead.
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: `local-${Date.now()}`,
+                  content: sent.content || "",
+                  contentHtml: sent.contentHtml,
+                  sender: {
+                    id: "current",
+                    name: currentUser?.name || "You",
+                    email: currentUser?.email || "",
+                  },
+                  timestamp: new Date().toISOString(),
+                  isRead: true,
+                },
+              ]);
+            }}
+            initial={replyCtx.initial}
+            threadContext={replyCtx.threadContext}
+            quote={replyCtx.quote}
+            title={replyCtx.title}
+            sendLabel={replyCtx.sendLabel}
+          />
+        </Suspense>
+      )}
+
+      <Snackbar
+        open={sentToast}
+        autoHideDuration={4000}
+        onClose={() => setSentToast(false)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        message="Message sent"
+      />
     </AppLayout>
   );
 }

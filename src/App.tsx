@@ -1,4 +1,5 @@
-import { ThemeProvider, CssBaseline } from "@mui/material";
+import { Suspense, lazy } from "react";
+import { ThemeProvider, CssBaseline, CircularProgress, Box } from "@mui/material";
 import { Routes, Route, Navigate } from "react-router-dom";
 import theme from "./theme";
 import { AuthProvider } from "./nonview/core/AuthContext";
@@ -13,12 +14,22 @@ import SentPage from "./view/pages/SentPage";
 import DraftsPage from "./view/pages/DraftsPage";
 import TrashPage from "./view/pages/TrashPage";
 import ThreadPage from "./view/pages/ThreadPage";
-import ComposePage from "./view/pages/ComposePage";
 import ProfilePage from "./view/pages/ProfilePage";
 import NotFoundPage from "./view/pages/NotFoundPage";
 
 // Import ProtectedRoute component
 import ProtectedRoute from "./view/moles/ProtectedRoute";
+import { ComposeProvider } from "./view/moles/ComposeProvider";
+
+// Compose pulls in react-email (templates + renderer). Lazy-load it so that
+// weight only ships when the user actually opens the composer.
+const ComposePage = lazy(() => import("./view/pages/ComposePage"));
+
+const RouteFallback = () => (
+  <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh" }}>
+    <CircularProgress />
+  </Box>
+);
 
 function App() {
   return (
@@ -26,6 +37,7 @@ function App() {
       <CssBaseline />
       <AuthProvider>
         <DataProvider>
+          <ComposeProvider>
           <Routes>
             {/* Public Routes */}
             <Route path="/login" element={<LoginPage />} />
@@ -85,7 +97,9 @@ function App() {
               path="/compose"
               element={
                 <ProtectedRoute>
-                  <ComposePage />
+                  <Suspense fallback={<RouteFallback />}>
+                    <ComposePage />
+                  </Suspense>
                 </ProtectedRoute>
               }
             />
@@ -101,6 +115,7 @@ function App() {
             {/* 404 Not Found - catch all */}
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
+          </ComposeProvider>
         </DataProvider>
       </AuthProvider>
     </ThemeProvider>

@@ -18,6 +18,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import { useData } from "../../nonview/core/DataContext";
 import { useAuth } from "../../nonview/core/AuthContext";
+import { useCompose } from "./ComposeProvider";
 import { getInitials } from "../_constants/avatarUtils";
 
 const Sidebar = () => {
@@ -25,6 +26,7 @@ const Sidebar = () => {
   const location = useLocation();
   const { unreadCount } = useData();
   const { currentUser } = useAuth();
+  const { openCompose } = useCompose();
 
   const navItems = [
     { label: "Inbox", path: "/inbox", icon: InboxIcon, badge: unreadCount },
@@ -57,7 +59,7 @@ const Sidebar = () => {
           variant="contained"
           color="primary"
           fullWidth
-          onClick={() => navigate("/compose")}
+          onClick={() => openCompose()}
           startIcon={<EditIcon />}
         >
           Compose

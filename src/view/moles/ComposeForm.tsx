@@ -1,7 +1,12 @@
 import React, { useRef } from "react";
-import { Box, TextField } from "@mui/material";
+import { Box, TextField, ToggleButton, ToggleButtonGroup } from "@mui/material";
+import NotesIcon from "@mui/icons-material/Notes";
+import DashboardCustomizeOutlinedIcon from "@mui/icons-material/DashboardCustomizeOutlined";
 import RecipientInput from "./RecipientInput";
 import ComposeActions from "./ComposeActions";
+import TemplateGallery from "./TemplateGallery";
+import TemplateEditor from "./TemplateEditor";
+import { getTemplate } from "../../nonview/email/templates";
 
 const ComposeForm = ({
   recipients,
@@ -15,8 +20,17 @@ const ComposeForm = ({
   onSaveDraft,
   onDiscard,
   contacts,
+  // Template mode
+  mode,
+  onModeChange,
+  templateId,
+  templateValues,
+  onTemplateSelect,
+  onTemplateValueChange,
+  onChangeTemplate,
 }) => {
   const fileInputRef = useRef(null);
+  const selectedTemplate = templateId ? getTemplate(templateId) : undefined;
 
   const handleAttachClick = () => {
     if (fileInputRef.current) {
@@ -52,18 +66,52 @@ const ComposeForm = ({
         />
       </Box>
 
-      <Box sx={{ mt: 2 }}>
-        <TextField
-          value={body}
-          onChange={(e) => onBodyChange(e.target.value)}
-          placeholder="Write your message..."
-          fullWidth
-          variant="outlined"
-          multiline
-          minRows={10}
-          maxRows={20}
-        />
+      <Box sx={{ mt: 2, display: "flex", justifyContent: "flex-end" }}>
+        <ToggleButtonGroup
+          size="small"
+          exclusive
+          value={mode}
+          onChange={(_, v) => v && onModeChange(v)}
+          aria-label="compose mode"
+        >
+          <ToggleButton value="plaintext" aria-label="plain text">
+            <NotesIcon fontSize="small" sx={{ mr: 0.5 }} />
+            Plain text
+          </ToggleButton>
+          <ToggleButton value="template" aria-label="template">
+            <DashboardCustomizeOutlinedIcon fontSize="small" sx={{ mr: 0.5 }} />
+            Template
+          </ToggleButton>
+        </ToggleButtonGroup>
       </Box>
+
+      {mode === "template" ? (
+        <Box sx={{ mt: 2 }}>
+          {selectedTemplate ? (
+            <TemplateEditor
+              template={selectedTemplate}
+              values={templateValues}
+              onChange={onTemplateValueChange}
+              onChangeTemplate={onChangeTemplate}
+            />
+          ) : (
+            <TemplateGallery onSelect={onTemplateSelect} selectedId={templateId} />
+          )}
+        </Box>
+      ) : (
+        <Box sx={{ mt: 2 }}>
+          <TextField
+            value={body}
+            onChange={(e) => onBodyChange(e.target.value)}
+            placeholder="Write your message..."
+            fullWidth
+            variant="outlined"
+            multiline
+            minRows={10}
+            maxRows={20}
+          />
+        </Box>
+      )}
 
       <ComposeActions
         onAttach={handleAttachClick}
