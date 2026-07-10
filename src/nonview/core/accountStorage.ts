@@ -6,6 +6,8 @@
 // Nothing consumes this module yet; it's additive groundwork for the
 // upcoming AccountContext.
 
+import type { LoginRequest } from "../api/types";
+
 export interface LinkedAccount {
   id: string; // stable id, e.g. lowercased email
   email: string;
@@ -23,6 +25,35 @@ export interface AccountSession {
   accountId: string; // FK -> LinkedAccount.id
   token: string;
   expiresAt: string; // ISO 8601
+}
+
+// What's needed to link a new account: every LinkedAccount field (id is
+// derived at creation time, not user-supplied) plus the mailbox password —
+// never persisted, only ever sent once to obtain a session token.
+export interface RegistrationData extends Omit<LinkedAccount, "id"> {
+  emailPassword: string;
+}
+
+// Shared by AuthContext.register (from RegistrationData) and
+// AccountContext.reauthenticate (from a stored LinkedAccount) — both carry
+// the same IMAP/SMTP fields, just from a different source object.
+export function toLoginRequest(
+  account: Pick<
+    LinkedAccount,
+    "email" | "imapHost" | "imapPort" | "imapSecure" | "smtpHost" | "smtpPort" | "smtpSecure"
+  >,
+  password: string,
+): LoginRequest {
+  return {
+    email: account.email,
+    password,
+    imap_host: account.imapHost,
+    imap_port: account.imapPort,
+    imap_secure: account.imapSecure,
+    smtp_host: account.smtpHost,
+    smtp_port: account.smtpPort,
+    smtp_secure: account.smtpSecure,
+  };
 }
 
 const STORAGE_ACCOUNTS = "quicksilver_accounts";

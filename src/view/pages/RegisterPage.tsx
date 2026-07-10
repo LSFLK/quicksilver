@@ -1,18 +1,18 @@
 import React, { useState } from "react";
 import { Box, Container, Typography, Link } from "@mui/material";
 import { useNavigate, Link as RouterLink } from "react-router-dom";
-import { useAuth } from "../../nonview/core/AuthContext";
+import { useAccount } from "../../nonview/core/AccountContext";
 import RegistrationForm from "../moles/RegistrationForm";
 
 function RegisterPage() {
   const navigate = useNavigate();
-  const { register } = useAuth();
+  const { addAccount } = useAccount();
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (data) => {
     setLoading(true);
     try {
-      await register(data);
+      await addAccount(data);
       navigate("/");
     } catch (error) {
       throw error;

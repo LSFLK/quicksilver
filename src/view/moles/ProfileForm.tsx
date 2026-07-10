@@ -65,7 +65,6 @@ function ProfileForm({ user, onSubmit }) {
     confirmPassword: "",
     // Email service configuration
     emailServiceProvider: user.emailServiceProvider || "gmail",
-    emailAddress: user.emailAddress || "",
     emailPassword: user.emailPassword || "",
     imapHost: user.imapHost || EMAIL_PROVIDERS.gmail.imapHost,
     imapPort: user.imapPort || EMAIL_PROVIDERS.gmail.imapPort,
@@ -148,7 +147,6 @@ function ProfileForm({ user, onSubmit }) {
         email: formData.email,
         // Email service configuration
         emailServiceProvider: formData.emailServiceProvider,
-        emailAddress: formData.emailAddress,
         emailPassword: formData.emailPassword,
         imapHost: formData.imapHost,
         imapPort: parseInt(String(formData.imapPort), 10),
@@ -211,11 +209,12 @@ function ProfileForm({ user, onSubmit }) {
         />
 
         <TextField
-          label="Email"
+          label="Email Address"
           type="email"
           name="email"
           value={formData.email}
           onChange={handleChange}
+          helperText="Your actual email address (e.g., yourname@gmail.com)"
           disabled={loading}
           fullWidth
           variant="outlined"
@@ -280,18 +279,6 @@ function ProfileForm({ user, onSubmit }) {
             </MenuItem>
           ))}
         </TextField>
-
-        <TextField
-          label="Email Address"
-          type="email"
-          name="emailAddress"
-          value={formData.emailAddress}
-          onChange={handleChange}
-          helperText="Your actual email address (e.g., yourname@gmail.com)"
-          disabled={loading}
-          fullWidth
-          variant="outlined"
-        />
 
         <TextField
           label="Email Password / App Password"

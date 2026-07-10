@@ -1,18 +1,28 @@
 import React, { useState } from "react";
 import { Box, Container, Typography, Link } from "@mui/material";
 import { useNavigate, Link as RouterLink } from "react-router-dom";
-import { useAuth } from "../../nonview/core/AuthContext";
+import { useAccount } from "../../nonview/core/AccountContext";
+import { APIError } from "../../nonview/api/client";
 import LoginForm from "../moles/LoginForm";
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { accounts, reauthenticate } = useAccount();
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (data) => {
     setLoading(true);
     try {
-      await login(data.email, data.password);
+      const entered = data.email.toLowerCase();
+      const account = accounts.find((a) => a.email.toLowerCase() === entered);
+      if (!account) {
+        throw new APIError(
+          400,
+          "no_account",
+          "No account found for that email on this device. Register to add it.",
+        );
+      }
+      await reauthenticate(account.id, data.password);
       navigate("/");
     } catch (error) {
       throw error;

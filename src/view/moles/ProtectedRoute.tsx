@@ -1,10 +1,10 @@
 import React from "react";
 import { Navigate } from "react-router-dom";
-import { useAuth } from "../../nonview/core/AuthContext";
+import { useAccount } from "../../nonview/core/AccountContext";
 import { Box, CircularProgress } from "@mui/material";
 
 function ProtectedRoute({ children }) {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading } = useAccount();
 
   if (loading) {
     // Show loading spinner while checking authentication

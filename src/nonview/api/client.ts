@@ -1,9 +1,9 @@
 // Typed fetch wrapper for the Quicksilver backend.
 //
-// Token handling is callback-based rather than module-level so the AuthContext
+// Token handling is callback-based rather than module-level so AccountContext
 // stays the single source of truth for "am I logged in" — the client just asks.
-// On 401 we invoke onUnauthorized so the context can drop the JWT and route to
-// /login.
+// On 401 we invoke onUnauthorized so the context can drop the stale session and
+// route to /login.
 
 import type { APIErrorBody } from "./types";
 

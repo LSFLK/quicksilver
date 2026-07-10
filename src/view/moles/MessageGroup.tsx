@@ -2,7 +2,7 @@ import React from "react";
 import { Box, Avatar } from "@mui/material";
 import { getInitials } from "../_constants/avatarUtils";
 import MessageBubble from "./MessageBubble";
-import { useAuth } from "../../nonview/core/AuthContext";
+import { useAccount } from "../../nonview/core/AccountContext";
 
 const MessageGroup = ({
   messages = [],
@@ -10,11 +10,11 @@ const MessageGroup = ({
   onDownloadAttachment,
   onFetchAttachment,
 }) => {
-  const { currentUser } = useAuth();
+  const { activeAccount } = useAccount();
 
   if (!messages.length) return null;
 
-  const isSent = sender?.id === "current" || (currentUser?.email && sender?.email === currentUser?.email);
+  const isSent = sender?.id === "current" || (activeAccount?.email && sender?.email === activeAccount?.email);
   const senderName = sender?.name || "Unknown";
 
   return (

@@ -10,7 +10,7 @@ import EmptyState from "../atoms/EmptyState";
 // it out of the main bundle — only load it when the user opens a reply popup.
 const ComposeDialog = lazy(() => import("../moles/ComposeDialog"));
 import { useData } from "../../nonview/core/DataContext";
-import { useAuth } from "../../nonview/core/AuthContext";
+import { useAccount } from "../../nonview/core/AccountContext";
 import { buildReplyContext, type ReplyMode } from "../../nonview/core/replyContext";
 import { plainTextToHtml } from "../../nonview/email/plainText";
 
@@ -26,7 +26,7 @@ function ThreadPage() {
     sendEmail,
     loading,
   } = useData();
-  const { currentUser } = useAuth();
+  const { activeAccount } = useAccount();
 
   const thread = threadId ? getThread(threadId) : undefined;
 
@@ -46,13 +46,13 @@ function ThreadPage() {
 
   const replyCtx = useMemo(() => {
     if (!replyMode || !thread) return null;
-    const ctx = buildReplyContext(replyMode, thread, messages, currentUser?.email);
+    const ctx = buildReplyContext(replyMode, thread, messages, activeAccount?.email);
     // Carry over whatever the user already typed inline into the popup.
     if (replyMode === "reply" && draftText.trim()) {
       return { ...ctx, initial: { ...ctx.initial, body: draftText } };
     }
     return ctx;
-  }, [replyMode, thread, messages, currentUser, draftText]);
+  }, [replyMode, thread, messages, activeAccount, draftText]);
 
   const appendLocalMessage = (content: string, contentHtml?: string) => {
     setMessages((prev) => [
@@ -63,8 +63,8 @@ function ThreadPage() {
         contentHtml,
         sender: {
           id: "current",
-          name: currentUser?.name || "You",
-          email: currentUser?.email || "",
+          name: activeAccount?.name || "You",
+          email: activeAccount?.email || "",
         },
         timestamp: new Date().toISOString(),
         isRead: true,
@@ -76,7 +76,7 @@ function ThreadPage() {
   // without opening the compose popup.
   const handleQuickSend = async () => {
     if (!thread || !draftText.trim() || sending) return;
-    const ctx = buildReplyContext("reply", thread, messages, currentUser?.email);
+    const ctx = buildReplyContext("reply", thread, messages, activeAccount?.email);
     const text = draftText.trim();
     const html = plainTextToHtml(text);
     setSending(true);

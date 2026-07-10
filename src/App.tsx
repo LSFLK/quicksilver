@@ -3,6 +3,7 @@ import { ThemeProvider, CssBaseline, CircularProgress, Box } from "@mui/material
 import { Routes, Route, Navigate } from "react-router-dom";
 import theme from "./theme";
 import { AuthProvider } from "./nonview/core/AuthContext";
+import { AccountProvider } from "./nonview/core/AccountContext";
 import { DataProvider } from "./nonview/core/DataContext";
 
 // Import page components
@@ -33,96 +34,98 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AuthProvider>
-        <DataProvider>
-          <ComposeProvider>
-            <Routes>
-              {/* Public Routes */}
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/register" element={<RegisterPage />} />
-              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <AccountProvider>
+          <DataProvider>
+            <ComposeProvider>
+              <Routes>
+                {/* Public Routes */}
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/register" element={<RegisterPage />} />
+                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
-              {/* Protected Routes */}
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <MailPage />
-                  </ProtectedRoute>
-                }
-              >
+                {/* Protected Routes */}
                 <Route
-                  path="thread/:threadId"
+                  path="/"
                   element={
                     <ProtectedRoute>
-                      <ThreadPage />
+                      <MailPage />
+                    </ProtectedRoute>
+                  }
+                >
+                  <Route
+                    path="thread/:threadId"
+                    element={
+                      <ProtectedRoute>
+                        <ThreadPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                </Route>
+                <Route
+                  path="/inbox"
+                  element={
+                    <ProtectedRoute>
+                      <Navigate to="/" replace />
                     </ProtectedRoute>
                   }
                 />
-              </Route>
-              <Route
-                path="/inbox"
-                element={
-                  <ProtectedRoute>
-                    <Navigate to="/" replace />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/sent"
-                element={
-                  <ProtectedRoute>
-                    <Navigate to="/" replace />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/drafts"
-                element={
-                  <ProtectedRoute>
-                    <Navigate to="/" replace />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/trash"
-                element={
-                  <ProtectedRoute>
-                    <Navigate to="/" replace />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/conversations"
-                element={
-                  <ProtectedRoute>
-                    <Navigate to="/" replace />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/compose"
-                element={
-                  <ProtectedRoute>
-                    <Suspense fallback={<RouteFallback />}>
-                      <ComposePage />
-                    </Suspense>
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/profile"
-                element={
-                  <ProtectedRoute>
-                    <ProfilePage />
-                  </ProtectedRoute>
-                }
-              />
+                <Route
+                  path="/sent"
+                  element={
+                    <ProtectedRoute>
+                      <Navigate to="/" replace />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/drafts"
+                  element={
+                    <ProtectedRoute>
+                      <Navigate to="/" replace />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/trash"
+                  element={
+                    <ProtectedRoute>
+                      <Navigate to="/" replace />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/conversations"
+                  element={
+                    <ProtectedRoute>
+                      <Navigate to="/" replace />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/compose"
+                  element={
+                    <ProtectedRoute>
+                      <Suspense fallback={<RouteFallback />}>
+                        <ComposePage />
+                      </Suspense>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/profile"
+                  element={
+                    <ProtectedRoute>
+                      <ProfilePage />
+                    </ProtectedRoute>
+                  }
+                />
 
-              {/* 404 Not Found - catch all */}
-              <Route path="*" element={<NotFoundPage />} />
-            </Routes>
-          </ComposeProvider>
-        </DataProvider>
+                {/* 404 Not Found - catch all */}
+                <Route path="*" element={<NotFoundPage />} />
+              </Routes>
+            </ComposeProvider>
+          </DataProvider>
+        </AccountProvider>
       </AuthProvider>
     </ThemeProvider>
   );

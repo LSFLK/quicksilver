@@ -1,22 +1,16 @@
 import React, { useState } from "react";
 import { Box, Container, Typography, Link } from "@mui/material";
 import { Link as RouterLink } from "react-router-dom";
-import { useAuth } from "../../nonview/core/AuthContext";
 import PasswordResetForm from "../moles/PasswordResetForm";
 
 function ForgotPasswordPage() {
-  const { resetPassword } = useAuth();
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (data) => {
+  // Password resets are handled by the upstream mail provider (e.g. Gmail),
+  // not by Quicksilver — there's no backend call to make here.
+  const handleSubmit = async (_data) => {
     setLoading(true);
-    try {
-      await resetPassword(data.email);
-    } catch (error) {
-      throw error;
-    } finally {
-      setLoading(false);
-    }
+    setLoading(false);
   };
 
   return (

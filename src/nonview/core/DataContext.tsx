@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { useAuth } from "./AuthContext";
+import { useAccount } from "./AccountContext";
 import { parseBody } from "./messageParser";
 import { mailboxes as mailboxesAPI, messages as messagesAPI } from "../api/endpoints";
 import {
@@ -282,11 +282,11 @@ interface DataProviderProps {
 }
 
 export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
-  const { apiClient, isAuthenticated, currentUser } = useAuth();
+  const { apiClient, isAuthenticated, activeAccount } = useAccount();
 
-  // Cache scope. Every IndexedDB read/write is namespaced by the signed-in
-  // address so a shared browser never mixes two accounts' mail.
-  const account = currentUser?.email || "";
+  // Cache scope. Every IndexedDB read/write is namespaced by the active
+  // account's id so a shared browser never mixes two accounts' mail.
+  const account = activeAccount?.id || "";
 
   const [mailboxList, setMailboxList] = useState<Mailbox[]>([]);
   const [threads, setThreads] = useState<Thread[]>([]);

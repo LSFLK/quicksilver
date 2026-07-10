@@ -10,7 +10,7 @@ import {
   Avatar,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../nonview/core/AuthContext";
+import { useAccount } from "../../nonview/core/AccountContext";
 import { getInitials } from "../_constants/avatarUtils";
 import SearchBar from "./SearchBar";
 
@@ -26,7 +26,7 @@ const Header = ({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const navigate = useNavigate();
-  const { currentUser } = useAuth();
+  const { activeAccount } = useAccount();
 
   const TitleIcon = titleIcon;
 
@@ -100,7 +100,7 @@ const Header = ({
                 bgcolor: "primary.main",
               }}
             >
-              {getInitials(currentUser?.name || "User")}
+              {getInitials(activeAccount?.name || "User")}
             </Avatar>
           </IconButton>
         </Box>
