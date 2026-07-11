@@ -1,0 +1,2 @@
+import{t as e}from"./ComposePanel-BBkXkyW2.js";import{G as t,K as n,a as r,q as i}from"./index-Deere-PW.js";var a=t(),o=e=>e?e.split(`,`).map(e=>e.trim()).filter(Boolean).map(e=>({email:e})):[];function s(){let t=n(),[s]=i(),c={to:o(s.get(`to`)),subject:s.get(`subject`)||``,body:s.get(`body`)||``};return(0,a.jsx)(r,{title:`Compose`,children:(0,a.jsx)(e,{initial:c,onClose:()=>{window.history.length>1?t(-1):t(`/`)},onSent:()=>t(`/`),onSavedDraft:()=>t(`/`)})})}export{s as default};
+//# sourceMappingURL=ComposePage-Drvv0Kvx.js.map
