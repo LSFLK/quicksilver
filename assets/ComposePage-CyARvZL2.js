@@ -1,0 +1,2 @@
+import{t as e}from"./ComposePanel-CouT1PAK.js";import{G as t,K as n,W as r,o as i}from"./index-CNLT5LtB.js";var a=r(),o=e=>e?e.split(`,`).map(e=>e.trim()).filter(Boolean).map(e=>({email:e})):[];function s(){let r=t(),[s]=n(),c={to:o(s.get(`to`)),subject:s.get(`subject`)||``,body:s.get(`body`)||``};return(0,a.jsx)(i,{title:`Compose`,children:(0,a.jsx)(e,{initial:c,onClose:()=>{window.history.length>1?r(-1):r(`/`)},onSent:()=>r(`/`),onSavedDraft:()=>r(`/`)})})}export{s as default};
+//# sourceMappingURL=ComposePage-CyARvZL2.js.map
