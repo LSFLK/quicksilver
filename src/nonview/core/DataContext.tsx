@@ -68,6 +68,10 @@ export interface ThreadMessage {
   // IMAP for received mail, so only To/Cc are available.
   to?: Participant[];
   cc?: Participant[];
+  // Message-ID of the message this one replies to (In-Reply-To header). Used
+  // to render the WhatsApp-style quoted preview and to strip the quoted chain
+  // from the reply body (issue #43). Absent on forwards and fresh mail.
+  inReplyTo?: string;
   timestamp: string;
   isRead: boolean;
   attachments?: AttachmentMeta[]; // downloadable attachment metadata (no bytes)
@@ -306,6 +310,7 @@ function messageToThreadMessage(
     },
     to: addressesToParticipants(m.to),
     cc: addressesToParticipants(m.cc),
+    inReplyTo: m.in_reply_to || undefined,
     timestamp: m.date,
     isRead: (m.flags || []).includes("\\Seen"),
     attachments: m.attachments && m.attachments.length ? m.attachments : undefined,

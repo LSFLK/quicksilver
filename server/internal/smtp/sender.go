@@ -63,10 +63,18 @@ func (s *Sender) Send(ctx context.Context, creds hmail.Credentials, msg hmail.Ou
 	}
 	m.Subject(msg.Subject)
 	if msg.InReplyTo != "" {
-		m.SetGenHeader(mail.HeaderInReplyTo, msg.InReplyTo)
+		m.SetGenHeader(mail.HeaderInReplyTo, ensureMsgID(msg.InReplyTo))
 	}
 	if len(msg.References) > 0 {
-		m.SetGenHeader(mail.HeaderReferences, strings.Join(msg.References, " "))
+		refs := make([]string, 0, len(msg.References))
+		for _, ref := range msg.References {
+			if r := ensureMsgID(ref); r != "" {
+				refs = append(refs, r)
+			}
+		}
+		if len(refs) > 0 {
+			m.SetGenHeader(mail.HeaderReferences, strings.Join(refs, " "))
+		}
 	}
 	if msg.BodyText != "" {
 		m.SetBodyString(mail.TypeTextPlain, msg.BodyText)
@@ -112,6 +120,24 @@ func (s *Sender) Send(ctx context.Context, creds hmail.Credentials, msg hmail.Ou
 		return fmt.Errorf("smtp send: %w", err)
 	}
 	return nil
+}
+
+// ensureMsgID wraps a bare message-id in the angle brackets RFC 5322 requires.
+// Clients send ids without brackets (the IMAP fetch path strips them), but a
+// bracket-less In-Reply-To/References header is malformed — strict parsers
+// (including our own read path) drop it, which breaks reply threading.
+func ensureMsgID(id string) string {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return id
+	}
+	if !strings.HasPrefix(id, "<") {
+		id = "<" + id
+	}
+	if !strings.HasSuffix(id, ">") {
+		id += ">"
+	}
+	return id
 }
 
 func setFrom(m *mail.Msg, a hmail.Address) error {

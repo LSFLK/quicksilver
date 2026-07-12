@@ -84,13 +84,14 @@ function ThreadPage() {
     return ctx;
   }, [replyMode, thread, messages, activeAccount, draftText]);
 
-  const appendLocalMessage = (content: string, contentHtml?: string) => {
+  const appendLocalMessage = (content: string, contentHtml?: string, inReplyTo?: string) => {
     setMessages((prev) => [
       ...prev,
       {
         id: `local-${Date.now()}`,
         content,
         contentHtml,
+        inReplyTo,
         sender: {
           id: "current",
           name: activeAccount?.name || "You",
@@ -120,7 +121,7 @@ function ThreadPage() {
         inReplyTo: ctx.threadContext.inReplyTo,
         references: ctx.threadContext.references,
       });
-      appendLocalMessage(text);
+      appendLocalMessage(text, undefined, ctx.threadContext.inReplyTo);
       setDraftText("");
       setToast("Message sent");
     } catch (e) {
@@ -368,7 +369,11 @@ function ThreadPage() {
               // Optimistically show the sent reply in the open conversation.
               // The real copy lives in the Sent mailbox, so a refetch of this
               // thread wouldn't surface it; append it locally instead.
-              appendLocalMessage(sent.content || "", sent.contentHtml);
+              appendLocalMessage(
+                sent.content || "",
+                sent.contentHtml,
+                replyCtx.threadContext.inReplyTo,
+              );
             }}
             initial={replyCtx.initial}
             threadContext={replyCtx.threadContext}

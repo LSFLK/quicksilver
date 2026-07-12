@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useCallback, useMemo } from "react";
 import { Box } from "@mui/material";
 import MessageGroup from "./MessageGroup";
 import MessageSkeleton from "../atoms/MessageSkeleton";
+import { stripQuotedText } from "../../nonview/email/quotedText";
 
 const groupMessages = (messages = []) => {
   const groups = [];
@@ -20,6 +21,10 @@ const groupMessages = (messages = []) => {
   return groups;
 };
 
+// Message-IDs appear with and without their angle brackets depending on the
+// header/DTO they came from; compare them normalised.
+const normalizeMessageId = (id) => (id || "").trim().replace(/^<|>$/g, "");
+
 const ThreadView = ({
   thread,
   messages = [],
@@ -28,6 +33,31 @@ const ThreadView = ({
   onFetchAttachment,
   onMessageAction = undefined,
 }) => {
+  // Reply → original lookup for the WhatsApp-style quoted preview (issue
+  // #43): match a reply's In-Reply-To against the thread's Message-IDs.
+  const byMessageId = useMemo(() => {
+    const map = new Map();
+    messages.forEach((m) => {
+      const key = normalizeMessageId(m.id);
+      if (key) map.set(key, m);
+    });
+    return map;
+  }, [messages]);
+
+  const resolveReplyTo = useCallback(
+    (message) => {
+      if (!message?.inReplyTo) return null;
+      const parent = byMessageId.get(normalizeMessageId(message.inReplyTo));
+      if (!parent || parent.id === message.id) return null;
+      return {
+        targetId: parent.id,
+        name: parent.sender?.name || parent.sender?.email || "Unknown",
+        snippet: stripQuotedText(parent.content || "").slice(0, 160),
+      };
+    },
+    [byMessageId],
+  );
+
   if (loading) {
     return <MessageSkeleton />;
   }
@@ -62,6 +92,7 @@ const ThreadView = ({
           onDownloadAttachment={onDownloadAttachment}
           onFetchAttachment={onFetchAttachment}
           onMessageAction={onMessageAction}
+          resolveReplyTo={resolveReplyTo}
         />
       ))}
     </Box>
