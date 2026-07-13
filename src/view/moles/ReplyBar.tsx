@@ -53,15 +53,15 @@ const ReplyBar = ({
           borderRadius: "16px",
           border: "1px solid",
           borderColor: "divider",
-          // Frosted floating layer with a diffused cyan-tinted lift on focus
+          // Frosted floating layer with a diffused matte-green lift on focus
           // (DESIGN.md, Elevation & Depth).
           backgroundColor: "rgba(255, 255, 255, 0.8)",
           backdropFilter: "blur(20px)",
           boxShadow: "0 6px 24px rgba(0, 0, 0, 0.05)",
           transition: "border-color 0.2s, box-shadow 0.2s",
           "&:focus-within": {
-            borderColor: "rgba(0, 242, 255, 0.5)",
-            boxShadow: "0 20px 40px -12px rgba(0, 242, 255, 0.15)",
+            borderColor: "rgba(61, 139, 78, 0.5)",
+            boxShadow: "0 20px 40px -12px rgba(61, 139, 78, 0.15)",
           },
           ...theme.applyStyles("dark", {
             backgroundColor: "rgba(255, 255, 255, 0.05)",
@@ -69,7 +69,7 @@ const ReplyBar = ({
             borderColor: "rgba(255, 255, 255, 0.10)",
             boxShadow: "0 10px 30px rgba(0, 0, 0, 0.4)",
             "&:focus-within": {
-              borderColor: "rgba(0, 242, 255, 0.4)",
+              borderColor: "rgba(61, 139, 78, 0.4)",
               boxShadow: "0 10px 30px rgba(0, 0, 0, 0.5)",
             },
           }),
@@ -117,15 +117,14 @@ const ReplyBar = ({
                 width: 40,
                 height: 40,
                 borderRadius: "12px",
-                // Solid electric-cyan action with deep-navy glyph and solar
-                // glow (DESIGN.md, Buttons).
-                backgroundColor: "#00F2FF",
-                color: "#002022",
-                border: "1px solid rgba(0, 242, 255, 0.4)",
-                boxShadow: "0 0 15px rgba(0, 242, 255, 0.25)",
+                // Solid matte-green action with light glyph (DESIGN.md, Buttons).
+                backgroundColor: "#3D8B4E",
+                color: "#F0F5F1",
+                border: "1px solid rgba(61, 139, 78, 0.4)",
+                boxShadow: "none",
                 transition: "transform 0.15s, background-color 0.2s, box-shadow 0.2s",
                 "&:hover": {
-                  backgroundColor: "#4DF5FF",
+                  backgroundColor: "#4A9E5C",
                   transform: "scale(1.05)",
                 },
                 "&.Mui-disabled": {
@@ -134,15 +133,14 @@ const ReplyBar = ({
                   border: "1px solid transparent",
                   boxShadow: "none",
                 },
-                // Dark mode: translucent neon-cyan button with a soft glow,
-                // matching the reference mock.
+                // Dark mode: translucent matte-green button.
                 ...theme.applyStyles("dark", {
-                  backgroundColor: "rgba(0, 242, 255, 0.15)",
-                  color: "primary.main",
-                  border: "1px solid rgba(0, 242, 255, 0.4)",
-                  boxShadow: "0 0 15px rgba(0, 242, 255, 0.2)",
+                  backgroundColor: "rgba(61, 139, 78, 0.15)",
+                  color: "#A5E0B0",
+                  border: "1px solid rgba(61, 139, 78, 0.4)",
+                  boxShadow: "none",
                   "&:hover": {
-                    backgroundColor: "rgba(0, 242, 255, 0.25)",
+                    backgroundColor: "rgba(61, 139, 78, 0.25)",
                     transform: "scale(1.05)",
                   },
                   "&.Mui-disabled": {

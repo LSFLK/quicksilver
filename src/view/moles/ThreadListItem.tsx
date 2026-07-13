@@ -147,14 +147,12 @@ const ThreadListItem = ({ thread, isSelected = false, onClick, onPrefetch = unde
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  // Electric-cyan LED badge with deep-navy count, glowing in
-                  // both schemes (reference mock's "12 NEW" chip).
-                  backgroundColor: "#00F2FF",
-                  color: "#002022",
+                  // Matte-green unread badge with light count.
+                  backgroundColor: "#3D8B4E",
+                  color: "#F0F5F1",
                   fontSize: "0.6875rem",
                   fontWeight: 700,
                   lineHeight: 1,
-                  boxShadow: "0 0 12px rgba(0, 242, 255, 0.35)",
                 }}
               >
                 {unreadCount}
