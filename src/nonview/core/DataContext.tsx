@@ -457,6 +457,26 @@ export const DataProvider: React.FC<DataProviderProps> = ({ children }) => {
       setMailboxList([]);
       return;
     }
+    // Clear the previous account's in-memory state before hydrating the new
+    // one. hydrateFromCache only *sets* state for folders that have cached
+    // rows, so without this an account switch to a cold cache would leave
+    // the previous account's threads on screen until loadAll's network call
+    // resolves. Clearing inboxName also forces the realtime effect below to
+    // close the old account's EventSource and reopen a fresh one once the
+    // new account's inbox name resolves, rather than keeping a stale
+    // connection alive under the new account's identity.
+    setThreads([]);
+    setSentThreads([]);
+    setDrafts([]);
+    setTrashedThreads([]);
+    setMailboxList([]);
+    setPage({});
+    setTotal({});
+    setPageLoading({});
+    pageCursors.current = {};
+    rolesRef.current = {};
+    setInboxName("");
+
     const ctrl = new AbortController();
     // Cache-first: paint from IndexedDB immediately, then refresh from the
     // network without a blocking spinner if the cache already had something.
