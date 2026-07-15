@@ -23,10 +23,6 @@ import {
   toLoginRequest,
   updateAccount as updateAccountStorage,
 } from "./accountStorage";
-
-// Owns the linked-account list, session list, active-account pointer, and
-// derives the APIClient from whichever session is currently active. Depends
-// on AuthContext for the actual credential exchange, never the reverse.
 interface AccountContextValue {
   accounts: LinkedAccount[];
   sessions: AccountSession[];
@@ -39,13 +35,8 @@ interface AccountContextValue {
   addAccount: (data: RegistrationData) => Promise<LinkedAccount>;
   reauthenticate: (id: string, password: string) => Promise<void>;
   updateAccount: (id: string, updates: Partial<LinkedAccount>) => LinkedAccount | null;
-  // Drops just this account's session (needs re-auth afterwards) without
-  // unlinking it — distinct from removeAccount (full unlink) and logoutAll.
   signOut: (id: string) => Promise<void>;
-  // Minimal for now: just moves the active-account pointer. Cache
-  // hydration/background sync/hook points are issue #29's scope.
   switchAccount: (id: string) => void;
-  // Real stubs — nothing calls these yet (no switcher/lifecycle UI exists).
   removeAccount: (id: string) => Promise<void>;
   logoutAll: () => Promise<void>;
 }
@@ -84,9 +75,6 @@ export const AccountProvider: React.FC<AccountProviderProps> = ({ children }) =>
   );
   const isAuthenticated = activeSession !== null;
 
-  // Mirrors AuthContext.tsx's old tokenRef pattern: apiClient must stay a
-  // stable reference, so the mutable "current token" lives in a ref that's
-  // kept in sync with the derived activeSession.
   const activeSessionRef = useRef<AccountSession | null>(activeSession);
   useEffect(() => {
     activeSessionRef.current = activeSession;
@@ -98,8 +86,6 @@ export const AccountProvider: React.FC<AccountProviderProps> = ({ children }) =>
         baseURL: defaultBaseURL(),
         getToken: () => activeSessionRef.current?.token ?? null,
         onUnauthorized: () => {
-          // Invalidate only the active account's session — never touch
-          // other linked accounts.
           const s = activeSessionRef.current;
           if (!s) return;
           removeSession(s.accountId);
@@ -109,21 +95,21 @@ export const AccountProvider: React.FC<AccountProviderProps> = ({ children }) =>
     [],
   );
 
-  // Hydrate on mount from localStorage (accounts/sessions) and this tab's
-  // sessionStorage active-account pointer. If no pointer is set yet but
-  // exactly one account exists, default to it — preserves today's exact
-  // single-account continuity until the account switcher (Parent 3) exists.
   useEffect(() => {
     const loadedAccounts = getAccounts();
     const loadedSessions = getSessions();
     setAccounts(loadedAccounts);
     setSessions(loadedSessions);
 
-    let id = sessionStorage.getItem(STORAGE_ACTIVE_ACCOUNT);
+    const urlAccountId = new URLSearchParams(window.location.search).get("account");
+    const hasValidUrlAccount =
+      !!urlAccountId && loadedAccounts.some((a) => a.id === urlAccountId);
+
+    let id = hasValidUrlAccount ? urlAccountId : sessionStorage.getItem(STORAGE_ACTIVE_ACCOUNT);
     if (!id && loadedAccounts.length === 1) {
       id = loadedAccounts[0].id;
-      sessionStorage.setItem(STORAGE_ACTIVE_ACCOUNT, id);
     }
+    if (id) sessionStorage.setItem(STORAGE_ACTIVE_ACCOUNT, id);
     setActiveAccountId(id);
     setLoading(false);
   }, []);
@@ -160,10 +146,9 @@ export const AccountProvider: React.FC<AccountProviderProps> = ({ children }) =>
       saveSession({ accountId: id, token: resp.token, expiresAt: resp.expires_at });
       setAccounts(getAccounts());
       setSessions(getSessions());
-      switchAccount(id);
       return account;
     },
-    [authContext, switchAccount],
+    [authContext],
   );
 
   const reauthenticate = useCallback(
