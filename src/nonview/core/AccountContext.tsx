@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import { useAuth } from "./AuthContext";
 import { APIClient, APIError, defaultBaseURL } from "../api/client";
+import { clearAccount } from "../cache/db";
 import {
   type AccountSession,
   type LinkedAccount,
@@ -17,6 +18,7 @@ import {
   getAccounts,
   getSession,
   getSessions,
+  removeAccountFromStorage,
   removeSession,
   saveAccount,
   saveSession,
@@ -186,13 +188,43 @@ export const AccountProvider: React.FC<AccountProviderProps> = ({ children }) =>
     [authContext],
   );
 
-  const removeAccount = useCallback(async (_id: string): Promise<void> => {
-    throw new Error("removeAccount is not implemented yet — see Parent Issue 5");
-  }, []);
+  const removeAccount = useCallback(
+    async (id: string): Promise<void> => {
+      const account = getAccount(id);
+      if (!account) return;
+
+      const session = getSession(id);
+      if (session) {
+        await authContext.logout(session);
+      }
+      removeSession(id);
+      await clearAccount(account.id);
+      removeAccountFromStorage(id);
+
+      const remaining = getAccounts();
+      setAccounts(remaining);
+      setSessions(getSessions());
+
+      if (activeAccountId === id) {
+        if (remaining.length > 0) {
+          switchAccount(remaining[0].id);
+        } else {
+          sessionStorage.removeItem(STORAGE_ACTIVE_ACCOUNT);
+          setActiveAccountId(null);
+        }
+      }
+    },
+    [authContext, activeAccountId, switchAccount],
+  );
 
   const logoutAll = useCallback(async (): Promise<void> => {
-    throw new Error("logoutAll is not implemented yet — see Parent Issue 5");
-  }, []);
+    const allSessions = getSessions();
+    await Promise.all(allSessions.map((s) => authContext.logout(s)));
+    allSessions.forEach((s) => removeSession(s.accountId));
+    setSessions(getSessions());
+    sessionStorage.removeItem(STORAGE_ACTIVE_ACCOUNT);
+    setActiveAccountId(null);
+  }, [authContext]);
 
   const value: AccountContextValue = {
     accounts,

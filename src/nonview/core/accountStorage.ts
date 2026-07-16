@@ -1,11 +1,3 @@
-// Multi-account storage layer. Replaces the single-profile model (see
-// AuthContext.tsx's MailProfile) with a list of linked accounts and a
-// separate list of their sessions — accounts and sessions have different
-// lifecycles (a 401 invalidates a session, not the linked account).
-//
-// Nothing consumes this module yet; it's additive groundwork for the
-// upcoming AccountContext.
-
 import type { LoginRequest } from "../api/types";
 
 export interface LinkedAccount {
@@ -109,7 +101,7 @@ export function updateAccount(
   return updated;
 }
 
-export function removeAccount(id: string): void {
+export function removeAccountFromStorage(id: string): void {
   writeList(
     STORAGE_ACCOUNTS,
     getAccounts().filter((a) => a.id !== id),
