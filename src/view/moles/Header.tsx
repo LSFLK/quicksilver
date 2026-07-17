@@ -10,9 +10,6 @@ import {
   Avatar,
   Tooltip,
 } from "@mui/material";
-import { useColorScheme } from "@mui/material/styles";
-import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
-import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
 import { useNavigate } from "react-router-dom";
 import { useAccount } from "../../nonview/core/AccountContext";
 import { getInitials } from "../_constants/avatarUtils";
@@ -31,8 +28,6 @@ const Header = ({
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
   const navigate = useNavigate();
   const { activeAccount } = useAccount();
-  const { mode, systemMode, setMode } = useColorScheme();
-  const resolvedMode = (mode === "system" ? systemMode : mode) || "light";
 
   const TitleIcon = titleIcon;
 
@@ -123,20 +118,6 @@ const Header = ({
               </Tooltip>
             );
           })}
-
-          <Tooltip title={resolvedMode === "dark" ? "Light mode" : "Dark mode"}>
-            <IconButton
-              onClick={() => setMode(resolvedMode === "dark" ? "light" : "dark")}
-              aria-label="toggle color scheme"
-              sx={{ color: "text.secondary" }}
-            >
-              {resolvedMode === "dark" ? (
-                <LightModeOutlinedIcon />
-              ) : (
-                <DarkModeOutlinedIcon />
-              )}
-            </IconButton>
-          </Tooltip>
 
           <IconButton
             onClick={() => navigate("/profile")}
