@@ -23,6 +23,7 @@ const MessageGroup = ({
   onDownloadAttachment,
   onFetchAttachment,
   onMessageAction = undefined,
+  resolveReplyTo = undefined,
 }) => {
   const { activeAccount } = useAccount();
 
@@ -97,6 +98,7 @@ const MessageGroup = ({
             onDownloadAttachment={onDownloadAttachment}
             onFetchAttachment={onFetchAttachment}
             onAction={onMessageAction}
+            replyTo={resolveReplyTo ? resolveReplyTo(message) : null}
           />
         ))}
       </Box>

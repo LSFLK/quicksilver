@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Box,
   Divider,
@@ -25,6 +25,7 @@ import AttachmentList from "./AttachmentList";
 import AttachmentViewer from "./AttachmentViewer";
 import { isRichHtml } from "../../nonview/email/htmlKind";
 import { stripQuotedText } from "../../nonview/email/quotedText";
+import { stripQuotedHtml } from "../../nonview/email/quotedHtml";
 
 // Corner radii for bubble stacks: the sender-side corners of grouped bubbles
 // shrink so consecutive messages visually "fuse" (DESIGN.md, Shapes).
@@ -42,13 +43,48 @@ const MessageBubble = ({
   // kebab and a right-click context menu; called as onAction(action, message)
   // with action ∈ reply | replyAll | forward | copy | unread | archive | delete.
   onAction = undefined,
+  // WhatsApp-style quoted preview (issue #43): { targetId, name, snippet } of
+  // the message this one replies to, resolved by ThreadView. Null when the
+  // message isn't a reply or the original isn't in the loaded conversation.
+  replyTo = null,
 }) => {
+  // Replies hide their quoted chain (issue #43): plain text via
+  // stripQuotedText, HTML via stripQuotedHtml. Richness is judged on the
+  // stripped body — a two-line reply quoting a newsletter is a chat bubble,
+  // not a full-width document.
+  const isReply = !!message.inReplyTo;
+  const displayHtml = useMemo(
+    () =>
+      isReply && message.contentHtml
+        ? stripQuotedHtml(message.contentHtml)
+        : message.contentHtml,
+    [isReply, message.contentHtml],
+  );
   // Full HTML email bodies are documents, not chat messages — they need the
   // whole column width. Plain-text replies stay in the narrow chat-bubble look.
-  const rich = isRichHtml(message.contentHtml);
+  const rich = isRichHtml(displayHtml);
   // Chat view shows only the new text a reply added, not the quoted original
   // that replyContext.ts appends before sending.
   const displayText = rich ? message.content : stripQuotedText(message.content);
+
+  // Scroll the conversation to the message this one replies to, with a brief
+  // highlight pulse. The original may have left the DOM (virtual scrolling is
+  // not used here, but it can be missing after a permanent delete) — no-op then.
+  const jumpToOriginal = () => {
+    if (!replyTo?.targetId || typeof document === "undefined") return;
+    const el = document.querySelector(
+      `[data-message-key="${CSS.escape(replyTo.targetId)}"]`,
+    );
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.animate?.(
+      [
+        { boxShadow: "0 0 0 4px rgba(0, 242, 255, 0.55)" },
+        { boxShadow: "0 0 0 4px rgba(0, 242, 255, 0)" },
+      ],
+      { duration: 1400, easing: "ease-out" },
+    );
+  };
 
   // Map the server attachment DTO (id/filename/mime_type/size) onto the shape
   // AttachmentPreview/AttachmentInfo expect (id/name/size).
@@ -143,6 +179,7 @@ const MessageBubble = ({
 
   return (
     <Box
+      data-message-key={message.id}
       sx={{
         position: "relative",
         minWidth: 0,
@@ -257,9 +294,64 @@ const MessageBubble = ({
               }
         }
       >
+        {replyTo && (
+          <Box
+            role="button"
+            tabIndex={0}
+            aria-label={`Show original message from ${replyTo.name}`}
+            onClick={jumpToOriginal}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                jumpToOriginal();
+              }
+            }}
+            sx={(theme) => ({
+              display: "flex",
+              flexDirection: "column",
+              gap: 0.25,
+              borderLeft: "3px solid",
+              borderLeftColor: "primary.main",
+              borderRadius: "6px",
+              px: 1.25,
+              py: 0.75,
+              mb: 1,
+              cursor: "pointer",
+              backgroundColor: "rgba(0, 105, 111, 0.07)",
+              transition: "background-color 0.15s",
+              "&:hover": { backgroundColor: "rgba(0, 105, 111, 0.13)" },
+              ...theme.applyStyles("dark", {
+                backgroundColor: "rgba(255, 255, 255, 0.06)",
+                "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.10)" },
+              }),
+            })}
+          >
+            <Typography
+              variant="caption"
+              sx={{ fontWeight: 700, color: "primary.main", lineHeight: 1.2 }}
+            >
+              {replyTo.name}
+            </Typography>
+            {replyTo.snippet && (
+              <Typography
+                variant="caption"
+                sx={{
+                  opacity: 0.75,
+                  lineHeight: 1.35,
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                }}
+              >
+                {replyTo.snippet}
+              </Typography>
+            )}
+          </Box>
+        )}
         <MessageContent
           content={displayText}
-          contentHtml={rich ? message.contentHtml : undefined}
+          contentHtml={rich ? displayHtml : undefined}
         />
         <AttachmentList
           attachments={attachments}
