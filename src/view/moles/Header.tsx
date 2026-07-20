@@ -7,13 +7,10 @@ import {
   useMediaQuery,
   useTheme,
   IconButton,
-  Avatar,
   Tooltip,
 } from "@mui/material";
-import { useNavigate } from "react-router-dom";
-import { useAccount } from "../../nonview/core/AccountContext";
-import { getInitials } from "../_constants/avatarUtils";
 import SearchBar from "./SearchBar";
+import AccountSwitcher from "./AccountSwitcher";
 
 const Header = ({
   title,
@@ -26,8 +23,6 @@ const Header = ({
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
-  const navigate = useNavigate();
-  const { activeAccount } = useAccount();
 
   const TitleIcon = titleIcon;
 
@@ -119,23 +114,9 @@ const Header = ({
             );
           })}
 
-          <IconButton
-            onClick={() => navigate("/profile")}
-            aria-label="profile"
-            sx={{ ml: isMobile ? 0.5 : 1 }}
-          >
-            <Avatar
-              sx={{
-                width: 32,
-                height: 32,
-                fontSize: "0.875rem",
-                bgcolor: "primary.main",
-                color: "primary.contrastText",
-              }}
-            >
-              {getInitials(activeAccount?.name || "User")}
-            </Avatar>
-          </IconButton>
+          <Box sx={{ ml: isMobile ? 0.5 : 1 }}>
+            <AccountSwitcher />
+          </Box>
         </Box>
       </Toolbar>
     </AppBar>
