@@ -1,14 +1,16 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Box,
   Stack,
   TextField,
   Button,
+  IconButton,
   CircularProgress,
   MenuItem,
   Typography,
   MobileStepper,
 } from "@mui/material";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ErrorMessage from "../atoms/ErrorMessage";
 import type { LinkedAccount, RegistrationData } from "../../nonview/core/accountStorage";
 
@@ -57,6 +59,14 @@ const EMAIL_PROVIDERS = {
   },
 };
 
+const FILLED_FIELD_SX = {
+  "& .MuiFilledInput-root": {
+    borderRadius: 2,
+    bgcolor: "action.hover",
+    "&::before, &::after": { display: "none" },
+  },
+};
+
 type Step = 1 | 2 | "success";
 
 interface AddAccountFormProps {
@@ -64,6 +74,7 @@ interface AddAccountFormProps {
   loading?: boolean;
   onSuccess: (account: LinkedAccount) => void;
   successCtaLabel?: string;
+  onStepChange?: (step: Step) => void;
 }
 
 // Two-step "add another account" form
@@ -72,6 +83,7 @@ const AddAccountForm = ({
   loading = false,
   onSuccess,
   successCtaLabel = "Continue",
+  onStepChange,
 }: AddAccountFormProps) => {
   const [step, setStep] = useState<Step>(1);
   const [formData, setFormData] = useState({
@@ -93,6 +105,10 @@ const AddAccountForm = ({
   const [createdAccount, setCreatedAccount] = useState<LinkedAccount | null>(null);
 
   const isBusy = loading || submitting;
+
+  useEffect(() => {
+    onStepChange?.(step);
+  }, [step]);
 
   const handleChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -195,20 +211,20 @@ const AddAccountForm = ({
     }
   };
 
+  const dots = (
+    <MobileStepper
+      variant="dots"
+      steps={2}
+      position="static"
+      activeStep={typeof step === "number" ? step - 1 : 0}
+      backButton={<span />}
+      nextButton={<span />}
+      sx={{ justifyContent: "center", bgcolor: "transparent", px: 0 }}
+    />
+  );
+
   return (
     <Box sx={{ width: "100%" }}>
-      {step !== "success" && (
-        <MobileStepper
-          variant="dots"
-          steps={2}
-          position="static"
-          activeStep={step - 1}
-          backButton={<span />}
-          nextButton={<span />}
-          sx={{ justifyContent: "center", bgcolor: "transparent", px: 0, mb: 3 }}
-        />
-      )}
-
       {formError && step !== "success" && (
         <Box sx={{ mb: 2 }}>
           <ErrorMessage message={formError} onDismiss={() => setFormError("")} />
@@ -231,8 +247,9 @@ const AddAccountForm = ({
             autoComplete="name"
             required
             fullWidth
-            variant="outlined"
+            variant="filled"
             disabled={isBusy}
+            sx={FILLED_FIELD_SX}
           />
           <TextField
             label="Email Address"
@@ -244,9 +261,12 @@ const AddAccountForm = ({
             autoComplete="email"
             required
             fullWidth
-            variant="outlined"
+            variant="filled"
             disabled={isBusy}
+            sx={FILLED_FIELD_SX}
           />
+
+          {dots}
 
           <Button
             variant="contained"
@@ -262,12 +282,23 @@ const AddAccountForm = ({
 
       {step === 2 && (
         <Stack spacing={2}>
-          <Typography variant="h6" textAlign="center">
-            Email Service Configuration
-          </Typography>
-          <Typography variant="body2" color="text.secondary" textAlign="center">
-            Configure your email service connection (Gmail, Outlook, etc.)
-          </Typography>
+          <Box sx={{ position: "relative", textAlign: "center" }}>
+            <IconButton
+              onClick={handleBack}
+              disabled={isBusy}
+              aria-label="back"
+              size="small"
+              sx={{ position: "absolute", left: 0, top: 2 }}
+            >
+              <ArrowBackIcon fontSize="small" />
+            </IconButton>
+            <Typography variant="h5" sx={{ fontWeight: 700 }}>
+              Email Service Configuration
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Configure your email service connection (Gmail, Outlook, etc.)
+            </Typography>
+          </Box>
 
           <TextField
             select
@@ -276,8 +307,9 @@ const AddAccountForm = ({
             onChange={handleChange("emailServiceProvider")}
             required
             fullWidth
-            variant="outlined"
+            variant="filled"
             disabled={isBusy}
+            sx={FILLED_FIELD_SX}
           >
             {Object.entries(EMAIL_PROVIDERS).map(([key, provider]) => (
               <MenuItem key={key} value={key}>
@@ -295,8 +327,9 @@ const AddAccountForm = ({
             helperText={errors.emailAddress || "Your actual email address (e.g., yourname@gmail.com)"}
             required
             fullWidth
-            variant="outlined"
+            variant="filled"
             disabled={isBusy}
+            sx={FILLED_FIELD_SX}
           />
           <TextField
             label="Email Password / App Password"
@@ -307,8 +340,9 @@ const AddAccountForm = ({
             helperText={errors.emailPassword || "For Gmail/Outlook, use an app-specific password"}
             required
             fullWidth
-            variant="outlined"
+            variant="filled"
             disabled={isBusy}
+            sx={FILLED_FIELD_SX}
           />
 
           {formData.emailServiceProvider === "custom" && (
@@ -323,8 +357,9 @@ const AddAccountForm = ({
                 helperText={errors.imapHost}
                 required
                 fullWidth
-                variant="outlined"
+                variant="filled"
                 disabled={isBusy}
+                sx={FILLED_FIELD_SX}
               />
               <TextField
                 label="IMAP Port"
@@ -333,8 +368,9 @@ const AddAccountForm = ({
                 onChange={handleChange("imapPort")}
                 required
                 fullWidth
-                variant="outlined"
+                variant="filled"
                 disabled={isBusy}
+                sx={FILLED_FIELD_SX}
               />
 
               <Typography variant="subtitle2">SMTP Settings (Outgoing Mail)</Typography>
@@ -347,8 +383,9 @@ const AddAccountForm = ({
                 helperText={errors.smtpHost}
                 required
                 fullWidth
-                variant="outlined"
+                variant="filled"
                 disabled={isBusy}
+                sx={FILLED_FIELD_SX}
               />
               <TextField
                 label="SMTP Port"
@@ -357,27 +394,25 @@ const AddAccountForm = ({
                 onChange={handleChange("smtpPort")}
                 required
                 fullWidth
-                variant="outlined"
+                variant="filled"
                 disabled={isBusy}
+                sx={FILLED_FIELD_SX}
               />
             </>
           )}
 
-          <Stack direction="row" spacing={2}>
-            <Button onClick={handleBack} disabled={isBusy}>
-              Back
-            </Button>
-            <Button
-              variant="contained"
-              color="primary"
-              fullWidth
-              onClick={handleComplete}
-              disabled={isBusy}
-              startIcon={isBusy ? <CircularProgress size={20} /> : null}
-            >
-              Complete Registration
-            </Button>
-          </Stack>
+          {dots}
+
+          <Button
+            variant="contained"
+            color="primary"
+            fullWidth
+            onClick={handleComplete}
+            disabled={isBusy}
+            startIcon={isBusy ? <CircularProgress size={20} /> : null}
+          >
+            Complete Registration
+          </Button>
         </Stack>
       )}
 
