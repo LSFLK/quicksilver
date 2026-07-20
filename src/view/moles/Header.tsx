@@ -7,16 +7,10 @@ import {
   useMediaQuery,
   useTheme,
   IconButton,
-  Avatar,
   Tooltip,
 } from "@mui/material";
-import { useColorScheme } from "@mui/material/styles";
-import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
-import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
-import { useNavigate } from "react-router-dom";
-import { useAccount } from "../../nonview/core/AccountContext";
-import { getInitials } from "../_constants/avatarUtils";
 import SearchBar from "./SearchBar";
+import AccountSwitcher from "./AccountSwitcher";
 
 const Header = ({
   title,
@@ -29,10 +23,6 @@ const Header = ({
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
-  const navigate = useNavigate();
-  const { activeAccount } = useAccount();
-  const { mode, systemMode, setMode } = useColorScheme();
-  const resolvedMode = (mode === "system" ? systemMode : mode) || "light";
 
   const TitleIcon = titleIcon;
 
@@ -124,37 +114,9 @@ const Header = ({
             );
           })}
 
-          <Tooltip title={resolvedMode === "dark" ? "Light mode" : "Dark mode"}>
-            <IconButton
-              onClick={() => setMode(resolvedMode === "dark" ? "light" : "dark")}
-              aria-label="toggle color scheme"
-              sx={{ color: "text.secondary" }}
-            >
-              {resolvedMode === "dark" ? (
-                <LightModeOutlinedIcon />
-              ) : (
-                <DarkModeOutlinedIcon />
-              )}
-            </IconButton>
-          </Tooltip>
-
-          <IconButton
-            onClick={() => navigate("/profile")}
-            aria-label="profile"
-            sx={{ ml: isMobile ? 0.5 : 1 }}
-          >
-            <Avatar
-              sx={{
-                width: 32,
-                height: 32,
-                fontSize: "0.875rem",
-                bgcolor: "primary.main",
-                color: "primary.contrastText",
-              }}
-            >
-              {getInitials(activeAccount?.name || "User")}
-            </Avatar>
-          </IconButton>
+          <Box sx={{ ml: isMobile ? 0.5 : 1 }}>
+            <AccountSwitcher />
+          </Box>
         </Box>
       </Toolbar>
     </AppBar>
